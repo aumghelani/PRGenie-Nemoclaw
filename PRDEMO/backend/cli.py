@@ -216,5 +216,70 @@ def _warn(msg: str) -> None:
         click.echo(f"   !!  {msg}")
 
 
+@cli.command("repo-pulse")
+@click.argument("repo")  # "owner/repo"
+@click.option("--limit", default=20, help="Max issues to score")
+def repo_pulse(repo: str, limit: int):
+    """Score every open issue + surface maintainer health signals."""
+    if "/" not in repo:
+        click.echo("error: REPO must be 'owner/repo'", err=True); sys.exit(1)
+    if not settings.GITHUB_PAT:
+        click.echo("error: GITHUB_PAT not set in .env", err=True); sys.exit(1)
+    asyncio.run(_pulse(repo, limit))
+
+
+async def _pulse(repo: str, limit: int) -> None:
+    from backend.agents.issue_demand_agent import score_issue
+    init_engine()
+    github = GitHubClient(mock_mode=False)
+
+    if HAS_RICH:
+        console.print(Panel(
+            f"[bold magenta]🤖 PRClaw Repo Pulse[/bold magenta]  [cyan]{repo}[/cyan]",
+            border_style="magenta",
+        ))
+
+    _step(f"Fetching up to {limit} open issues…")
+    issues = await github.get_open_issues(repo, installation_id=0, limit=limit)
+    _ok(f"got {len(issues)} open issues")
+
+    scored = []
+    for issue in issues:
+        s = score_issue(issue)
+        scored.append((issue, s))
+    scored.sort(key=lambda x: x[1]["priority_score"], reverse=True)
+
+    if HAS_RICH:
+        t = Table(title=f"Open issues by demand · {repo}")
+        t.add_column("#", style="cyan", no_wrap=True)
+        t.add_column("Title", overflow="fold")
+        t.add_column("Demand", justify="center")
+        t.add_column("React", justify="right")
+        t.add_column("Comm", justify="right")
+        t.add_column("Days", justify="right")
+        t.add_column("Score", justify="right", style="bold")
+        for issue, s in scored:
+            emoji = {"high":"🔴","medium":"🟡","low":"🟢"}.get(s["demand_level"],"⚪")
+            t.add_row(str(issue["number"]), issue["title"][:60],
+                      f"{emoji} {s['demand_level']}",
+                      str(s["reactions"]), str(s["unique_commenters"]),
+                      str(s["days_open"]), f"{s['priority_score']:.1f}")
+        console.print(t)
+
+        high = sum(1 for _, s in scored if s["demand_level"] == "high")
+        avg_age = sum(s["days_open"] for _, s in scored) / max(1, len(scored))
+        console.print(Panel(
+            f"[bold]Maintainer health signals[/bold]\n"
+            f"  open issues: [yellow]{len(scored)}[/yellow]\n"
+            f"  high-demand: [red]{high}[/red]\n"
+            f"  avg age: [yellow]{avg_age:.0f}[/yellow] days\n"
+            f"  oldest issue: #{scored[-1][0]['number'] if scored else '—'}",
+            border_style="green",
+        ))
+    else:
+        for issue, s in scored:
+            click.echo(f"#{issue['number']:>4} [{s['demand_level']:>6}] {s['priority_score']:>5.1f}  {issue['title'][:60]}")
+
+
 if __name__ == "__main__":
     cli()
