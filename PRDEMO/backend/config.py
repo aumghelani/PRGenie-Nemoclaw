@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     # Override with Brev IP via .env when the GPU instance is up.
     VLLM_BASE_URL: str = "http://localhost:5000/v1"
     VLLM_MODEL: str = "nemotron"
+    VLLM_API_KEY: str = "not-needed"   # set to NVIDIA NGC key when hitting integrate.api.nvidia.com
     ENABLE_NVEXT_HEADERS: bool = True
     MOCK_MODE: bool = True
     LLM_TEMPERATURE: float = 0.3

@@ -104,8 +104,8 @@ class LLMClient:
         self.base_url = base_url if base_url is not None else settings.VLLM_BASE_URL
         self.model = model if model is not None else settings.VLLM_MODEL
         self.mock_mode = settings.MOCK_MODE if mock_mode is None else mock_mode
-        # vLLM expects an api key field but doesn't validate it.
-        self._client = AsyncOpenAI(base_url=self.base_url, api_key="not-needed")
+        # vLLM ignores the key; NVIDIA cloud at integrate.api.nvidia.com requires an NGC key.
+        self._client = AsyncOpenAI(base_url=self.base_url, api_key=settings.VLLM_API_KEY)
         self.recorded_calls: list[RecordedLLMCall] = []
 
     # ------------------------------------------------------------------
