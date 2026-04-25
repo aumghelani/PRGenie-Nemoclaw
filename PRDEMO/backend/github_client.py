@@ -202,6 +202,10 @@ class GitHubClient:
         if self.mock_mode:
             return f"mock_installation_token_for_{installation_id}"
 
+        # PAT path — no JWT, no installation token, just use the PAT directly.
+        if settings.GITHUB_PAT:
+            return settings.GITHUB_PAT
+
         cached = self._token_cache.get(installation_id)
         # Refresh 60s before expiry to be safe.
         if cached and cached.expires_at > time.time() + 60:

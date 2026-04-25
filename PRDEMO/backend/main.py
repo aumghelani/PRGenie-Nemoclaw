@@ -3,7 +3,7 @@ from fastapi import FastAPI
 
 from backend.config import settings
 from backend.db.session import init_engine
-from backend.routers import health, webhook
+from backend.routers import dashboard, health, webhook
 
 
 @asynccontextmanager
@@ -21,10 +21,11 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(webhook.router)
+app.include_router(dashboard.router)
 
 
-@app.get("/")
-async def root() -> dict:
+@app.get("/api/info")
+async def info() -> dict:
     return {
         "service": "prclaw",
         "mock_mode": settings.MOCK_MODE,

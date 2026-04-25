@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRClaw — GitHub-native PR triage</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+  .glow { box-shadow: 0 0 24px rgba(118, 185, 0, 0.18); }
+  .agent-card { transition: all .25s ease; }
+  .agent-card.running { animation: pulse 1.4s infinite; }
+  .agent-card.done { border-color: #76b900; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(118,185,0,.45); }
+    50%      { box-shadow: 0 0 0 12px rgba(118,185,0,0); }
+  }
+  .markdown-body table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  .markdown-body th, .markdown-body td { padding: 6px 12px; border: 1px solid #2d2d2d; }
+  .markdown-body code { background: #1a1a1a; padding: 2px 6px; border-radius: 4px; }
+  .markdown-body ul { list-style: disc; margin-left: 20px; }
+</style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen">
+
+<header class="border-b border-zinc-800">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="text-3xl">🤖</div>
+      <div>
+        <div class="text-2xl font-bold tracking-tight">PR<span class="text-[#76b900]">Claw</span></div>
+        <div class="text-xs text-zinc-400">GitHub-native multi-agent PR triage · powered by NemoClaw + Nemotron</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 text-xs">
+      <div class="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800">
+        <span class="text-zinc-400">model:</span> <span id="model-name" class="font-mono text-[#76b900]">—</span>
+      </div>
+      <div class="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800">
+        <span class="text-zinc-400">policy:</span> <span class="font-mono text-[#76b900]">.github/prclaw.yml</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+
+  <!-- Triage form -->
+  <section class="bg-zinc-900 border border-zinc-800 rounded-xl p-6 glow">
+    <h2 class="text-lg font-semibold mb-4">Triage a real PR</h2>
+    <form id="triage-form" class="grid grid-cols-1 md:grid-cols-12 gap-3">
+      <input id="repo" placeholder="owner/repo (e.g. aumghelani/Redhat-Hackathon-JABST)"
+             class="md:col-span-7 bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm focus:border-[#76b900] focus:outline-none" required>
+      <input id="pr_number" type="number" min="1" placeholder="PR #"
+             class="md:col-span-2 bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm focus:border-[#76b900] focus:outline-none" required>
+      <label class="md:col-span-1 flex items-center gap-2 text-xs text-zinc-400">
+        <input id="dry_run" type="checkbox" checked class="accent-[#76b900]"> dry-run
+      </label>
+      <button type="submit" id="run-btn"
+              class="md:col-span-2 bg-[#76b900] hover:bg-[#5e9400] disabled:bg-zinc-800 text-black font-semibold rounded-lg px-4 py-2.5 text-sm transition">
+        Run pipeline →
+      </button>
+    </form>
+    <div class="text-xs text-zinc-500 mt-3">
+      Dry-run shows what would be posted without touching the repo. Uncheck to post for real.
+      Requires <code class="text-[#76b900]">GITHUB_PAT</code> in <code>.env</code> with <code>repo</code> scope.
+    </div>
+  </section>
+
+  <!-- Agent pipeline visualization -->
+  <section>
+    <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+      <span>The 7 agents</span>
+      <span class="text-xs text-zinc-500 font-normal">(hospital-ER analogy — see README)</span>
+    </h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+      <div id="agent-trust"     class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+        <div class="text-2xl">🩺</div><div class="text-xs font-semibold mt-1">Trust Scorer</div>
+        <div class="text-[10px] text-zinc-500">Receptionist</div>
+      </div>
+      <div id="agent-risk"      class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+        <div class="text-2xl">⚠️</div><div class="text-xs font-semibold mt-1">Risk Agent</div>
+        <div class="text-[10px] text-zinc-500">Triage Nurse</div>
+      </div>
+      <div id="agent-reviewer"  class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+        <div class="text-2xl">🧭</div><div class="text-xs font-semibold mt-1">Reviewer Sug.</div>
+        <div class="text-[10px] text-zinc-500">Specialist Ref.</div>
+      </div>
+      <div id="agent-persona"   class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+        <div class="text-2xl">🧠</div><div class="text-xs font-semibold mt-1">Persona Extr.</div>
+        <div class="text-[10px] text-zinc-500">Patient Profiler</div>
+      </div>
+      <div id="agent-triage"    class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+        <div class="text-2xl">👨‍⚕️</div><div class="text-xs font-semibold mt-1">Triage Agent</div>
+        <div class="text-[10px] text-zinc-500">Lead Doctor</div>
+      </div>
+      <div id="agent-review"    class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+        <div class="text-2xl">📝</div><div class="text-xs font-semibold mt-1">Review Comm.</div>
+        <div class="text-[10px] text-zinc-500">Sr. Consultant</div>
+      </div>
+      <div id="agent-demand"    class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+        <div class="text-2xl">📊</div><div class="text-xs font-semibold mt-1">Issue Demand</div>
+        <div class="text-[10px] text-zinc-500">Public Health</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section id="results" class="hidden space-y-6">
+
+    <!-- Status badges -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+        <div class="text-xs text-zinc-500 uppercase tracking-wider">Trust</div>
+        <div id="trust-badge" class="mt-2 text-2xl font-bold">—</div>
+        <div id="trust-score" class="text-xs text-zinc-400 mt-1">—</div>
+      </div>
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+        <div class="text-xs text-zinc-500 uppercase tracking-wider">Risk</div>
+        <div id="risk-badge" class="mt-2 text-2xl font-bold">—</div>
+        <div id="risk-score" class="text-xs text-zinc-400 mt-1">—</div>
+      </div>
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+        <div class="text-xs text-zinc-500 uppercase tracking-wider">Priority</div>
+        <div id="priority-badge" class="mt-2 text-2xl font-bold">—</div>
+        <div id="action-badge" class="text-xs text-zinc-400 mt-1">—</div>
+      </div>
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+        <div class="text-xs text-zinc-500 uppercase tracking-wider">Reviewer</div>
+        <div id="reviewer-badge" class="mt-2 text-2xl font-bold">—</div>
+        <div class="text-xs text-zinc-400 mt-1">git-blame ownership</div>
+      </div>
+    </div>
+
+    <!-- PR details + persona -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
+        <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Pull Request</h3>
+        <div id="pr-info" class="space-y-2 text-sm"></div>
+      </div>
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
+        <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Maintainer Persona <span class="text-[10px] text-zinc-500">(LLM-extracted)</span></h3>
+        <div id="persona-info" class="space-y-2 text-sm"></div>
+      </div>
+    </div>
+
+    <!-- Triage comment preview -->
+    <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
+      <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center justify-between">
+        <span>Bot comment <span class="text-[10px] text-zinc-500 normal-case">— what gets posted to GitHub</span></span>
+        <span id="post-status" class="text-xs"></span>
+      </h3>
+      <div id="comment-md" class="markdown-body text-sm"></div>
+    </div>
+
+    <!-- NemoClaw policy -->
+    <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
+      <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">NemoClaw policy gates</h3>
+      <div class="text-xs text-zinc-400 mb-2">Hard-forbidden actions (cannot be re-enabled by YAML):</div>
+      <div id="forbidden-list" class="flex flex-wrap gap-2"></div>
+    </div>
+  </section>
+
+  <!-- Loading / error -->
+  <div id="loader" class="hidden text-center py-12">
+    <div class="inline-block animate-spin rounded-full h-12 w-12 border-2 border-zinc-800 border-t-[#76b900]"></div>
+    <div class="text-zinc-400 mt-4 text-sm" id="loader-text">Running pipeline…</div>
+  </div>
+  <div id="error" class="hidden bg-red-950 border border-red-800 rounded-lg p-4 text-red-200 text-sm"></div>
+
+</main>
+
+<footer class="text-center text-xs text-zinc-600 py-8">
+  PRClaw · Red Hat Open Accelerator vLLM Hackathon · Track 5 · Powered by NVIDIA NemoClaw + Nemotron
+</footer>
+
+<script>
+const TRUST_EMOJI = {high: '🟢', medium: '🟡', new: '⚪', flagged: '🔴'};
+const RISK_EMOJI  = {low: '🟢', medium: '🟡', high: '🔴', critical: '🚨'};
+const AGENTS = ['trust','risk','reviewer','persona','triage'];
+
+function setAgentState(id, state) {
+  const el = document.getElementById('agent-' + id);
+  el.classList.remove('running','done');
+  if (state) el.classList.add(state);
+}
+
+function resetAgents() {
+  for (const a of AGENTS) setAgentState(a, null);
+  setAgentState('review', null);
+  setAgentState('demand', null);
+}
+
+document.getElementById('triage-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const repo = document.getElementById('repo').value.trim();
+  const pr_number = parseInt(document.getElementById('pr_number').value);
+  const dry_run = document.getElementById('dry_run').checked;
+
+  document.getElementById('error').classList.add('hidden');
+  document.getElementById('results').classList.add('hidden');
+  document.getElementById('loader').classList.remove('hidden');
+  document.getElementById('run-btn').disabled = true;
+
+  resetAgents();
+  // visual progression while we wait — staggered animation
+  AGENTS.forEach((a, i) => setTimeout(() => setAgentState(a, 'running'), i * 400));
+
+  try {
+    const r = await fetch('/api/triage', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({repo, pr_number, dry_run}),
+    });
+    if (!r.ok) {
+      const err = await r.text();
+      throw new Error(err);
+    }
+    const data = await r.json();
+    AGENTS.forEach(a => setAgentState(a, 'done'));
+    render(data, dry_run);
+  } catch (err) {
+    document.getElementById('error').textContent = 'Error: ' + (err.message || err);
+    document.getElementById('error').classList.remove('hidden');
+    resetAgents();
+  } finally {
+    document.getElementById('loader').classList.add('hidden');
+    document.getElementById('run-btn').disabled = false;
+  }
+});
+
+function render(d, dry_run) {
+  document.getElementById('results').classList.remove('hidden');
+  document.getElementById('model-name').textContent = d.model;
+
+  // Badges
+  document.getElementById('trust-badge').innerHTML = (TRUST_EMOJI[d.trust.trust_level]||'') + ' ' + d.trust.trust_level;
+  document.getElementById('trust-score').textContent = 'score ' + d.trust.trust_score.toFixed(2);
+  document.getElementById('risk-badge').innerHTML  = (RISK_EMOJI[d.risk.risk_level]||'') + ' ' + d.risk.risk_level;
+  document.getElementById('risk-score').textContent = (d.risk.sensitive_files.length ? 'sensitive: ' + d.risk.sensitive_files.join(', ') : 'no sensitive paths');
+  document.getElementById('priority-badge').textContent = d.analysis.priority;
+  document.getElementById('action-badge').textContent = 'action: ' + d.analysis.suggested_action;
+  document.getElementById('reviewer-badge').textContent = d.reviewer ? '@' + d.reviewer : '—';
+
+  // PR info
+  document.getElementById('pr-info').innerHTML = `
+    <div><span class="text-zinc-500">repo:</span> <span class="font-mono">${d.pr.repo}</span></div>
+    <div><span class="text-zinc-500">PR:</span> <a class="text-[#76b900] hover:underline" href="${d.pr.html_url}" target="_blank">#${d.pr.number} ${escapeHtml(d.pr.title)}</a></div>
+    <div><span class="text-zinc-500">author:</span> <span class="font-mono">@${d.pr.author}</span></div>
+    <div><span class="text-zinc-500">size:</span> <span class="text-green-400">+${d.pr.additions}</span> <span class="text-red-400">-${d.pr.deletions}</span> across ${d.pr.files_count} files</div>
+    <div><span class="text-zinc-500">files:</span> <span class="font-mono text-xs">${d.pr.files.slice(0,5).join(', ')}${d.pr.files.length>5?', …':''}</span></div>
+  `;
+
+  // Persona
+  document.getElementById('persona-info').innerHTML = `
+    <div><span class="text-zinc-500">focus:</span> ${(d.persona.focus||[]).map(f=>'<span class="bg-zinc-800 rounded px-2 py-0.5 text-xs mr-1">'+escapeHtml(f)+'</span>').join('')}</div>
+    <div><span class="text-zinc-500">tone:</span> <span class="italic">${escapeHtml(d.persona.tone||'')}</span></div>
+    <div><span class="text-zinc-500">strictness:</span> ${d.persona.strictness?.toFixed?.(2) ?? '—'}</div>
+    <div><span class="text-zinc-500">phrases:</span> <span class="font-mono text-xs">${(d.persona.common_phrases||[]).slice(0,3).map(escapeHtml).join('  ·  ')}</span></div>
+  `;
+
+  // Comment
+  document.getElementById('comment-md').innerHTML = marked.parse(d.triage_comment_md);
+  if (d.posted_comment_id) {
+    document.getElementById('post-status').innerHTML = `<span class="text-[#76b900]">✓ posted (id ${d.posted_comment_id})</span>`;
+  } else if (dry_run) {
+    document.getElementById('post-status').innerHTML = `<span class="text-yellow-500">dry-run — not posted</span>`;
+  }
+
+  // Forbidden actions
+  document.getElementById('forbidden-list').innerHTML = d.policy.forbidden.map(f =>
+    `<span class="bg-red-950 border border-red-900 text-red-300 rounded px-2 py-1 text-xs font-mono">${escapeHtml(f)}</span>`
+  ).join('');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+</body>
+</html>
