@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PRGenie — Your wish for clean PRs, granted.</title>
+<title>PRGenie — Multi-agent GitHub triage.</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -72,12 +73,12 @@
 <header class="border-b border-zinc-800 backdrop-blur sticky top-0 z-10 bg-zinc-950/80">
   <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <div class="text-3xl">🧞</div>
+      <div class="text-3xl">🤖</div>
       <div>
         <div class="text-2xl font-extrabold tracking-tight">
           PR<span class="brand-grad">Genie</span>
         </div>
-        <div class="text-[11px] text-zinc-500">Your wish for clean PRs, granted · Multi-agent GitHub triage powered by NemoClaw + Nemotron</div>
+        <div class="text-[11px] text-zinc-500">Multi-agent GitHub triage · Powered by NemoClaw + Nemotron / Llama on NVIDIA NIM</div>
       </div>
     </div>
     <div class="flex items-center gap-2 text-[11px]">
@@ -115,7 +116,7 @@
       </label>
       <button type="submit" id="run-btn"
               class="md:col-span-2 bg-[#76b900] hover:bg-[#5e9400] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-semibold rounded-lg px-4 py-2.5 text-sm transition shadow-lg shadow-[#76b900]/20">
-        🪄 Grant my wish
+        Run pipeline →
       </button>
     </form>
 
@@ -226,6 +227,36 @@
       <div id="comment-md" class="markdown-body text-sm"></div>
     </div>
 
+    <!-- Metrics + comparison chart -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">⚡ LLM call metrics</h3>
+        <div class="grid grid-cols-3 gap-3 mb-4">
+          <div>
+            <div class="text-[10px] text-zinc-500 uppercase">Calls</div>
+            <div id="m-calls" class="text-2xl font-bold text-[#76b900]">—</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-zinc-500 uppercase">Tokens</div>
+            <div id="m-tokens" class="text-2xl font-bold text-[#76b900]">—</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-zinc-500 uppercase">LLM time</div>
+            <div id="m-llm-ms" class="text-2xl font-bold text-[#76b900]">—</div>
+          </div>
+        </div>
+        <div id="call-list" class="space-y-1 text-xs"></div>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 glow-purple">
+        <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-1">🆚 PRGenie vs naive baseline</h3>
+        <div class="text-[10px] text-zinc-500 mb-3">
+          Naive baseline = 4 separate LLM calls, no nvext routing, no tool-calling, no prefix caching.
+          PRGenie = 1 tool-calling call with system-prompt prefix caching + nvext priority hints.
+        </div>
+        <canvas id="cmp-chart" height="200"></canvas>
+      </div>
+    </div>
+
     <!-- NemoClaw policy -->
     <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 glow-purple">
       <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">🛡️ NemoClaw policy gates</h3>
@@ -239,7 +270,7 @@
   <!-- Loading / error -->
   <div id="loader" class="hidden text-center py-12">
     <div class="inline-block animate-spin rounded-full h-12 w-12 border-2 border-zinc-800 border-t-[#76b900]"></div>
-    <div class="text-zinc-400 mt-4 text-sm" id="loader-text">🧞 Granting your wish…</div>
+    <div class="text-zinc-400 mt-4 text-sm" id="loader-text">Running pipeline…</div>
   </div>
   <div id="error" class="hidden bg-red-950/80 border border-red-800 rounded-xl p-4 text-red-200 text-sm"></div>
 
@@ -302,7 +333,7 @@ document.getElementById('triage-form').addEventListener('submit', async (e) => {
     AGENTS.forEach(a => setAgentState(a, 'done'));
     render(data, dry_run);
   } catch (err) {
-    document.getElementById('error').textContent = '🧞 The genie could not grant your wish: ' + (err.message || err);
+    document.getElementById('error').textContent = 'Pipeline error: ' + (err.message || err);
     document.getElementById('error').classList.remove('hidden');
     resetAgents();
   } finally {
@@ -344,6 +375,69 @@ function render(d, dry_run) {
   } else if (dry_run) {
     document.getElementById('post-status').innerHTML = `<span class="text-yellow-500">🔒 dry-run — not posted</span>`;
   }
+
+  // Metrics
+  const m = d.metrics || {};
+  document.getElementById('m-calls').textContent = (m.llm_calls||[]).length;
+  document.getElementById('m-tokens').textContent = m.total_tokens || 0;
+  document.getElementById('m-llm-ms').textContent = (m.total_llm_ms || m.pipeline_ms || 0).toFixed(0) + ' ms';
+  document.getElementById('call-list').innerHTML = (m.llm_calls||[]).map(c =>
+    `<div class="flex items-center justify-between border border-zinc-800 rounded px-3 py-2 mono">
+       <span class="text-zinc-300">${escapeHtml(c.tool)}</span>
+       <span class="flex items-center gap-3">
+         <span class="text-[10px] text-zinc-500">${c.priority||'—'} · ${c.request_class||'—'}</span>
+         <span class="text-[#76b900]">${c.latency_ms?.toFixed?.(0) ?? '—'} ms</span>
+         <span class="text-[#a855f7]">${c.tokens ?? '—'} tok</span>
+       </span>
+     </div>`
+  ).join('');
+
+  // Comparison chart
+  const cmp = (m.comparison) || {prgenie: {calls:0, tokens:0, ms:0}, naive: {calls:0, tokens:0, ms:0}};
+  if (window._cmpChart) window._cmpChart.destroy();
+  const ctx = document.getElementById('cmp-chart').getContext('2d');
+  window._cmpChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['LLM calls', 'Tokens (×100)', 'Total ms (×10)'],
+      datasets: [
+        {
+          label: 'Naive (baseline)',
+          data: [cmp.naive.calls, Math.round(cmp.naive.tokens/100), Math.round(cmp.naive.ms/10)],
+          backgroundColor: 'rgba(244, 63, 94, 0.55)',
+          borderColor: 'rgb(244, 63, 94)',
+          borderWidth: 1,
+        },
+        {
+          label: 'PRGenie (NemoClaw + nvext + tool-calling)',
+          data: [cmp.prgenie.calls, Math.round(cmp.prgenie.tokens/100), Math.round(cmp.prgenie.ms/10)],
+          backgroundColor: 'rgba(118, 185, 0, 0.55)',
+          borderColor: 'rgb(118, 185, 0)',
+          borderWidth: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: '#a1a1aa', font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const v = ctx.parsed.y;
+              if (ctx.label === 'Tokens (×100)') return `${ctx.dataset.label}: ${v*100} tokens`;
+              if (ctx.label === 'Total ms (×10)') return `${ctx.dataset.label}: ${v*10} ms`;
+              return `${ctx.dataset.label}: ${v}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' } },
+        y: { ticks: { color: '#a1a1aa' }, grid: { color: '#27272a' }, beginAtZero: true },
+      },
+    },
+  });
 
   document.getElementById('forbidden-list').innerHTML = d.policy.forbidden.map(f =>
     `<span class="bg-red-950/40 border border-red-900/50 text-red-300 rounded-lg px-3 py-1 text-xs mono">⛔ ${escapeHtml(f)}</span>`

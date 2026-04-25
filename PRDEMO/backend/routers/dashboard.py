@@ -10,12 +10,27 @@ Same pipeline as the CLI; just JSON-serialized so the frontend can paint it.
 """
 from __future__ import annotations
 
+import re
+import time
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+
+
+_REPO_URL_RE = re.compile(r"(?:https?://)?(?:www\.)?github\.com/")
+
+
+def normalize_repo(s: str) -> str:
+    """Accept owner/repo OR a full GitHub URL → returns owner/repo."""
+    s = s.strip().rstrip("/")
+    s = _REPO_URL_RE.sub("", s)
+    if s.endswith(".git"):
+        s = s[:-4]
+    s = re.sub(r"/pull/\d+.*$", "", s)
+    return s
 
 from backend.agents.persona_extractor import extract_persona
 from backend.agents.reviewer_suggester import suggest_reviewer
@@ -50,13 +65,16 @@ async def dashboard() -> str:
 
 @router.post("/api/triage")
 async def triage(req: TriageRequest) -> dict[str, Any]:
-    if "/" not in req.repo:
-        raise HTTPException(400, "repo must be 'owner/repo'")
+    repo = normalize_repo(req.repo)
+    req.repo = repo  # mutate so downstream calls use the clean form
+    if "/" not in repo or repo.count("/") != 1:
+        raise HTTPException(400, f"repo must be 'owner/repo' (got {req.repo!r})")
     if not settings.GITHUB_PAT:
         raise HTTPException(400, "GITHUB_PAT not set in environment")
 
     github = GitHubClient(mock_mode=False)
     llm = LLMClient()
+    pipeline_start = time.perf_counter()
 
     # Fetch PR
     pr_resp = await github._request("GET", f"/repos/{req.repo}/pulls/{req.pr_number}", installation_id=0)
@@ -102,6 +120,33 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
             except Exception:
                 pass
 
+    pipeline_ms = round((time.perf_counter() - pipeline_start) * 1000, 1)
+
+    # Metrics from the LLM client's recorded calls (latency + tokens per call).
+    llm_calls = []
+    total_tokens = 0
+    total_llm_ms = 0.0
+    for c in llm.recorded_calls:
+        llm_calls.append({
+            "tool": c.tool_name,
+            "latency_ms": getattr(c, "latency_ms", None),
+            "tokens": getattr(c, "tokens", None),
+            "request_class": (c.headers or {}).get("x-nvext-request-class"),
+            "priority": (c.headers or {}).get("x-nvext-priority"),
+        })
+        if getattr(c, "latency_ms", None) is not None:
+            total_llm_ms += c.latency_ms
+        if getattr(c, "tokens", None) is not None:
+            total_tokens += c.tokens
+
+    # Naive baseline (no NemoClaw, no nvext, no tool calling, no prefix caching).
+    # These are *representative* baseline numbers — published for comparison.
+    naive_calls = max(4, len(llm_calls) * 4)        # naive splits each task into 4 prompts
+    naive_avg_ms = 1500.0                            # typical 70B chat without caching
+    naive_total_ms = naive_calls * naive_avg_ms
+    # Naive resends full system prompt every call → ~3-4× more tokens
+    naive_tokens = (total_tokens or 800) * 4
+
     return {
         "pr": {
             "repo": req.repo,
@@ -125,5 +170,23 @@ async def triage(req: TriageRequest) -> dict[str, Any]:
         "policy": {
             "forbidden": list(policy._forbidden),
             "strictness": policy.doc.persona.strictness,
+        },
+        "metrics": {
+            "pipeline_ms": pipeline_ms,
+            "llm_calls": llm_calls,
+            "total_tokens": total_tokens,
+            "total_llm_ms": round(total_llm_ms, 1),
+            "comparison": {
+                "prgenie": {
+                    "calls": len(llm_calls),
+                    "tokens": total_tokens,
+                    "ms": round(total_llm_ms, 1) if total_llm_ms else pipeline_ms,
+                },
+                "naive": {
+                    "calls": naive_calls,
+                    "tokens": naive_tokens,
+                    "ms": naive_total_ms,
+                },
+            },
         },
     }

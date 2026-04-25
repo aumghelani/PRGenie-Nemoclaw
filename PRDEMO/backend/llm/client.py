@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -86,12 +87,14 @@ def build_nvext_headers(tool_name: str, *, latency_sensitive: bool | None = None
 
 @dataclass
 class RecordedLLMCall:
-    """Captured call for tests / mock-mode demo log."""
+    """Captured call for tests / mock-mode demo log + dashboard metrics."""
     system: str
     user: str
     tool_name: str
     headers: dict
     response: dict
+    latency_ms: float | None = None
+    tokens: int | None = None
 
 
 class LLMClient:
@@ -136,11 +139,14 @@ class LLMClient:
                 raise KeyError(f"No mock response for tool {tool_name!r}")
             self.recorded_calls.append(RecordedLLMCall(
                 system=system, user=user, tool_name=tool_name, headers=headers, response=response,
+                latency_ms=12.0,  # mock — instant
+                tokens=len(json.dumps(response)) // 4,
             ))
             log.info("[mock-llm] tool=%s headers=%s", tool_name, headers)
             return response
 
         # Real call.
+        t0 = time.perf_counter()
         try:
             completion = await self._client.chat.completions.create(
                 model=self.model,
@@ -169,7 +175,15 @@ class LLMClient:
         except json.JSONDecodeError as e:
             raise ValueError(f"Model returned malformed JSON for {tool_name!r}: {e}") from e
 
-        log.info("llm tool_call name=%s args_keys=%s", tool_name, list(args.keys()))
+        latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+        usage = getattr(completion, "usage", None)
+        tokens = getattr(usage, "total_tokens", None) if usage else None
+
+        self.recorded_calls.append(RecordedLLMCall(
+            system=system, user=user, tool_name=tool_name, headers=headers, response=args,
+            latency_ms=latency_ms, tokens=tokens,
+        ))
+        log.info("llm tool_call name=%s latency_ms=%.1f tokens=%s", tool_name, latency_ms, tokens)
         return args
 
 

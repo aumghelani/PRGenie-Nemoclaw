@@ -58,10 +58,12 @@ def triage_pr(repo: str, pr_number: int, dry_run: bool):
     """
     Run the full triage pipeline on a real GitHub PR.
 
-    REPO is "owner/repo". Requires GITHUB_PAT in .env.
+    REPO is "owner/repo" (or a full GitHub URL). Requires GITHUB_PAT in .env.
     """
-    if "/" not in repo:
-        click.echo("error: REPO must be in the form 'owner/repo'", err=True)
+    from backend.routers.dashboard import normalize_repo
+    repo = normalize_repo(repo)
+    if "/" not in repo or repo.count("/") != 1:
+        click.echo(f"error: REPO must be 'owner/repo' (got {repo!r})", err=True)
         sys.exit(1)
 
     if not settings.GITHUB_PAT:
