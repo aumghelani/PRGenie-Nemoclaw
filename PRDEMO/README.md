@@ -1,17 +1,17 @@
-# PRClaw
+# PRGenie
 
 > **A GitHub-native AI agent that triages PRs, scores contributor trust, and surfaces high-demand issues — entirely inside GitHub.**
 > Powered by **NemoClaw** policy enforcement + **vLLM**-served Nemotron.
 
 ---
 
-## What is PRClaw?
+## What is PRGenie?
 
-PRClaw is a **GitHub App**. You install it on a repo, and it starts watching pull requests and issues like a hospital ER watches incoming patients — every PR is "intake," every issue is "a complaint at the front desk."
+PRGenie is a **GitHub App**. You install it on a repo, and it starts watching pull requests and issues like a hospital ER watches incoming patients — every PR is "intake," every issue is "a complaint at the front desk."
 
 A team of **7 specialised agents** each plays a role:
 
-| Hospital Role         | PRClaw Agent          | What it does in one line                                       |
+| Hospital Role         | PRGenie Agent          | What it does in one line                                       |
 |-----------------------|-----------------------|-----------------------------------------------------------------|
 | Receptionist          | Trust Scorer          | Looks at the contributor's history — friend or stranger?        |
 | Triage Nurse          | Risk Agent            | "How sick is this PR?" — diff size + sensitive files            |
@@ -158,7 +158,7 @@ The only agent that holds the whole chart. Takes the diff, the maintainer's pers
 **What it's blocked from.**
 - Output is schema-validated **before** posting. Free-form text outside the JSON schema is dropped.
 - Cannot recommend `merge` or `close` actions — only `approve / request_changes / comment / escalate`.
-- Cannot leak persona phrases as if they were the maintainer speaking — the comment is signed "🤖 PRClaw."
+- Cannot leak persona phrases as if they were the maintainer speaking — the comment is signed "🤖 PRGenie."
 
 **Policy snippet** (steers tone & strictness via persona block):
 ```yaml
@@ -281,7 +281,7 @@ if not policy.can_apply_label(label): return
 if policy.is_action_forbidden(action): raise NemoClawViolation(...)
 ```
 
-The policy lives in **`.github/prclaw.yml`** of the target repo. PRClaw fetches it on every event, merges it over a `DEFAULT_POLICY`, and feeds the merged dict to `PolicyEnforcer`.
+The policy lives in **`.github/prclaw.yml`** of the target repo. PRGenie fetches it on every event, merges it over a `DEFAULT_POLICY`, and feeds the merged dict to `PolicyEnforcer`.
 
 **Forbidden actions** are *hard-coded* — no YAML can re-enable them:
 - `merge_pr`
@@ -366,7 +366,7 @@ PRDEMO/
 
 ## Wiring up Brev (when GPU is live)
 
-PRClaw talks to vLLM via the OpenAI Chat Completions API. The team's vLLM is served from the scripts in `agentbench-live/vllm_setup/` on a Brev GPU instance.
+PRGenie talks to vLLM via the OpenAI Chat Completions API. The team's vLLM is served from the scripts in `agentbench-live/vllm_setup/` on a Brev GPU instance.
 
 **1. Confirm the vLLM endpoint on Brev:**
 ```bash
