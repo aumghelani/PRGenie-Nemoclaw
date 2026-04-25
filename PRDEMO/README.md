@@ -1,27 +1,27 @@
-# PRClaw
+# PRGenie
 
 > **A GitHub-native AI agent that triages PRs, scores contributor trust, and surfaces high-demand issues — entirely inside GitHub.**
 > Powered by **NemoClaw** policy enforcement + **vLLM**-served Nemotron.
 
 ---
 
-## What is PRClaw?
+## What is PRGenie?
 
-PRClaw is a **GitHub App**. You install it on a repo, and it starts watching pull requests and issues like a hospital ER watches incoming patients — every PR is "intake," every issue is "a complaint at the front desk."
+PRGenie is a **GitHub App**. You install it on a repo, and it starts watching pull requests and issues like a hospital ER watches incoming patients — every PR is "intake," every issue is "a complaint at the front desk."
 
 A team of **7 specialised agents** each plays a role:
 
-| Hospital Role         | PRClaw Agent          | What it does in one line                                       |
+| Hospital Role         | PRGenie Agent          | What it does in one line                                       |
 |-----------------------|-----------------------|-----------------------------------------------------------------|
 | Receptionist          | Trust Scorer          | Looks at the contributor's history — friend or stranger?        |
 | Triage Nurse          | Risk Agent            | "How sick is this PR?" — diff size + sensitive files            |
 | Lead Doctor           | Triage Agent          | Reads the chart, writes the diagnosis (summary + checklist)     |
 | Specialist Referrer   | Reviewer Suggester    | Routes the case to the right specialist (file owner)            |
 | Patient Profiler      | Persona Extractor     | Learns *how this maintainer* prefers to treat patients          |
-| Senior Consultant     | Review Commenter      | Writes the formal opinion when the doctor says `/prclaw review` |
+| Senior Consultant     | Review Commenter      | Writes the formal opinion when the doctor says `/prgenie review` |
 | Public Health Officer | Issue Demand Agent    | Watches the waiting room — flags outbreaks                      |
 
-The whole hospital runs under one set of safety rules — `.github/prclaw.yml` — enforced by **NemoClaw** (the hospital's safety/compliance officer). No agent can do anything the policy file forbids.
+The whole hospital runs under one set of safety rules — `.github/prgenie.yml` — enforced by **NemoClaw** (the hospital's safety/compliance officer). No agent can do anything the policy file forbids.
 
 ---
 
@@ -40,7 +40,7 @@ uvicorn backend.main:app --reload --port 8080
 Then:
 ```bash
 curl http://localhost:8080/health
-# → {"status": "ok", "service": "prclaw"}
+# → {"status": "ok", "service": "prgenie"}
 ```
 
 ---
@@ -55,7 +55,7 @@ GitHub  ──webhook──►  FastAPI /webhook
                           │
         ┌─────────────────┼─────────────────┐
         ▼                 ▼                 ▼
-   PR opened       /prclaw review      Issue opened
+   PR opened       /prgenie review      Issue opened
         │                 │                 │
         ▼                 ▼                 ▼
    ┌─Pipeline─┐    ReviewCommenter    IssueDemandAgent
@@ -81,7 +81,7 @@ Each card uses the same five-section template:
 1. **Role** — what the agent does, one paragraph
 2. **What it can access** — its inputs and read permissions
 3. **What it's blocked from** — NemoClaw guardrails it cannot violate
-4. **Policy snippet** — the `.github/prclaw.yml` keys that steer it
+4. **Policy snippet** — the `.github/prgenie.yml` keys that steer it
 5. **How it talks to other agents** — its outputs and the shared "patient chart" (DB + GitHub API)
 
 ---
@@ -100,7 +100,7 @@ First contact. When a PR lands, the Trust Scorer pulls up the contributor's reco
 - `use_identity_signals` — name, org, nationality, profile photo. Behaviour-only.
 - Cannot label a contributor `flagged` based on anything outside the repo's own history.
 
-**Policy snippet** (`.github/prclaw.yml`):
+**Policy snippet** (`.github/prgenie.yml`):
 ```yaml
 trust:
   auto_label: true
@@ -158,7 +158,7 @@ The only agent that holds the whole chart. Takes the diff, the maintainer's pers
 **What it's blocked from.**
 - Output is schema-validated **before** posting. Free-form text outside the JSON schema is dropped.
 - Cannot recommend `merge` or `close` actions — only `approve / request_changes / comment / escalate`.
-- Cannot leak persona phrases as if they were the maintainer speaking — the comment is signed "🤖 PRClaw."
+- Cannot leak persona phrases as if they were the maintainer speaking — the comment is signed "🤖 PRGenie."
 
 **Policy snippet** (steers tone & strictness via persona block):
 ```yaml
@@ -169,7 +169,7 @@ persona:
 ```
 
 **How it talks to other agents.**
-Writes a full `PRAnalysis` row. The webhook handler calls `format_triage_comment(...)` and posts it to GitHub as a single bot comment + a Check Run. The Review Commenter (later, on `/prclaw review`) reads the cached `concerns` list to ground its inline comments.
+Writes a full `PRAnalysis` row. The webhook handler calls `format_triage_comment(...)` and posts it to GitHub as a single bot comment + a Check Run. The Review Commenter (later, on `/prgenie review`) reads the cached `concerns` list to ground its inline comments.
 
 ---
 
@@ -217,7 +217,7 @@ Writes `MaintainerPersona { focus, strictness, tone, common_phrases, tolerance }
 ### 6. Review Commenter — *the Senior Consultant*
 
 **Role.**
-Sleeps until the maintainer types `/prclaw review` on a PR. Then takes the cached triage concerns + the persona + the diff, and produces *inline review comments* positioned on specific lines, written in the maintainer's voice. **One LLM call per `/prclaw review` invocation.**
+Sleeps until the maintainer types `/prgenie review` on a PR. Then takes the cached triage concerns + the persona + the diff, and produces *inline review comments* positioned on specific lines, written in the maintainer's voice. **One LLM call per `/prgenie review` invocation.**
 
 **What it can access.**
 - Cached `PRAnalysis` (from the original PR-opened pipeline)
@@ -225,7 +225,7 @@ Sleeps until the maintainer types `/prclaw review` on a PR. Then takes the cache
 - The PR diff again (for line-position lookup)
 
 **What it's blocked from.**
-- **Will not run without the human `/prclaw review` command.** The webhook handler asks NemoClaw `can_submit_review(triggered_by_command=True)` and bails if `False`.
+- **Will not run without the human `/prgenie review` command.** The webhook handler asks NemoClaw `can_submit_review(triggered_by_command=True)` and bails if `False`.
 - Each generated comment is run through `validate_review_comment()` — empty bodies and harsh-language patterns are dropped.
 - Verdict can only be `COMMENT` or `REQUEST_CHANGES`; **never `APPROVE`**.
 
@@ -281,7 +281,7 @@ if not policy.can_apply_label(label): return
 if policy.is_action_forbidden(action): raise NemoClawViolation(...)
 ```
 
-The policy lives in **`.github/prclaw.yml`** of the target repo. PRClaw fetches it on every event, merges it over a `DEFAULT_POLICY`, and feeds the merged dict to `PolicyEnforcer`.
+The policy lives in **`.github/prgenie.yml`** of the target repo. PRGenie fetches it on every event, merges it over a `DEFAULT_POLICY`, and feeds the merged dict to `PolicyEnforcer`.
 
 **Forbidden actions** are *hard-coded* — no YAML can re-enable them:
 - `merge_pr`
@@ -324,7 +324,7 @@ PRDEMO/
 │       ├── webhook.py           POST /webhook                [Phase 1]
 │       └── health.py            GET /health                  [Phase 0 ✓]
 ├── .github/
-│   └── prclaw.yml               Sample NemoClaw policy
+│   └── prgenie.yml               Sample NemoClaw policy
 ├── tests/
 │   ├── test_trust_scorer.py
 │   ├── test_triage_agent.py
@@ -357,7 +357,7 @@ PRDEMO/
 | 9     | Persona Extractor                        | ✅ done (5 tests) |
 | 10    | Triage Agent                             | ✅ done (7 tests) |
 | 11    | Wire PR pipeline end-to-end              | ✅ done (4 e2e tests) |
-| 12    | Review Commenter + `/prclaw review`      | ✅ done (4 tests) |
+| 12    | Review Commenter + `/prgenie review`      | ✅ done (4 tests) |
 | 13    | Issue Demand Agent                       | ✅ done (8 tests) |
 | 14    | Mock demo polish                         | ⏳ next |
 | 15    | Live GitHub App (if GPU available)       |        |
@@ -366,7 +366,7 @@ PRDEMO/
 
 ## Wiring up Brev (when GPU is live)
 
-PRClaw talks to vLLM via the OpenAI Chat Completions API. The team's vLLM is served from the scripts in `agentbench-live/vllm_setup/` on a Brev GPU instance.
+PRGenie talks to vLLM via the OpenAI Chat Completions API. The team's vLLM is served from the scripts in `agentbench-live/vllm_setup/` on a Brev GPU instance.
 
 **1. Confirm the vLLM endpoint on Brev:**
 ```bash
