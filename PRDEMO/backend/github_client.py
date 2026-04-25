@@ -175,7 +175,9 @@ class GitHubClient:
     ):
         self.app_id = app_id if app_id is not None else settings.GITHUB_APP_ID
         self.private_key_path = private_key_path if private_key_path is not None else settings.GITHUB_PRIVATE_KEY_PATH
-        self.mock_mode = settings.MOCK_MODE if mock_mode is None else mock_mode
+        if mock_mode is None:
+            mock_mode = settings.GITHUB_MOCK_MODE if settings.GITHUB_MOCK_MODE is not None else settings.MOCK_MODE
+        self.mock_mode = mock_mode
         self._token_cache: dict[int, _CachedToken] = {}
         self._private_key = None  # lazy-loaded
         self.recorded_calls: list[RecordedCall] = []

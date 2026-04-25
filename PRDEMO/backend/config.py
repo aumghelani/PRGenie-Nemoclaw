@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     VLLM_API_KEY: str = "not-needed"   # set to NVIDIA NGC key when hitting integrate.api.nvidia.com
     ENABLE_NVEXT_HEADERS: bool = True
     MOCK_MODE: bool = True
+    # Optional fine-grained overrides — if unset, both default to MOCK_MODE.
+    GITHUB_MOCK_MODE: bool | None = None
+    LLM_MOCK_MODE: bool | None = None
     LLM_TEMPERATURE: float = 0.3
     LLM_MAX_TOKENS: int = 1024
     LLM_TIMEOUT_SECONDS: float = 60.0
