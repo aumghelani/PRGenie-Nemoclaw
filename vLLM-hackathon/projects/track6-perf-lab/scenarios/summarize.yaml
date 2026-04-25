@@ -1,0 +1,21 @@
+# GuideLLM scenario: document summarization
+# Large prefill, small decode — stresses prefill throughput + chunked prefill
+target: http://localhost:8000/v1
+model: /models/llama-3.1-8b-instruct
+
+rate_type: concurrent
+rate: [1, 2, 4]
+duration: 60
+
+data:
+  prompt_tokens: 4096
+  output_tokens: 256
+  samples: 64
+
+metrics:
+  - time_to_first_token
+  - prefill_tokens_per_second
+  - output_tokens_per_second
+
+output:
+  file: results/summarize.json

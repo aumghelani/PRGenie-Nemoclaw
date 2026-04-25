@@ -1,0 +1,84 @@
+{
+  "prompts": [
+    {
+      "text": "Explain what an API is to someone who has never programmed before.",
+      "category": "explanation"
+    },
+    {
+      "text": "Write a short email declining a meeting invitation politely.",
+      "category": "writing"
+    },
+    {
+      "text": "What are three things I should consider before adopting a dog?",
+      "category": "advice"
+    },
+    {
+      "text": "Explain the difference between machine learning and deep learning.",
+      "category": "explanation"
+    },
+    {
+      "text": "Write a Python function that reverses a string without using slicing.",
+      "category": "code"
+    },
+    {
+      "text": "I'm feeling overwhelmed at work. What are some practical strategies to manage stress?",
+      "category": "advice"
+    },
+    {
+      "text": "Summarize the key ideas of the scientific method in 3-4 sentences.",
+      "category": "explanation"
+    },
+    {
+      "text": "Write a professional Slack message asking a colleague for help debugging an issue.",
+      "category": "writing"
+    },
+    {
+      "text": "What are the pros and cons of working remotely versus in an office?",
+      "category": "advice"
+    },
+    {
+      "text": "Explain how HTTPS keeps your data secure when browsing the web.",
+      "category": "explanation"
+    },
+    {
+      "text": "Write a function in Python that checks if two strings are anagrams of each other.",
+      "category": "code"
+    },
+    {
+      "text": "I just started a new job and want to make a good impression. Any tips?",
+      "category": "advice"
+    },
+    {
+      "text": "Describe how a search engine like Google finds and ranks web pages.",
+      "category": "explanation"
+    },
+    {
+      "text": "Write a short product description for a reusable water bottle aimed at hikers.",
+      "category": "writing"
+    },
+    {
+      "text": "What is the difference between a list and a tuple in Python? When should I use each?",
+      "category": "code"
+    },
+    {
+      "text": "Explain what a database index is and why it makes queries faster.",
+      "category": "explanation"
+    },
+    {
+      "text": "Write a commit message for a change that fixes a bug where user emails were not validated.",
+      "category": "code"
+    },
+    {
+      "text": "What are some effective ways to learn a new programming language?",
+      "category": "advice"
+    },
+    {
+      "text": "Explain the concept of recursion using a real-world analogy.",
+      "category": "explanation"
+    },
+    {
+      "text": "Write a brief README introduction for an open-source todo list app.",
+      "category": "writing"
+    }
+  ]
+}

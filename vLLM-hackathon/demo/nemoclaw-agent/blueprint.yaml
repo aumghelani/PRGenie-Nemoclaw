@@ -1,0 +1,87 @@
+# =============================================================================
+# NemoClaw Blueprint — Agentic Edge (Track 5)
+# Defines inference profiles, network policy, and agent configuration.
+# =============================================================================
+
+apiVersion: nemoclaw/v1
+kind: Blueprint
+metadata:
+  name: agentic-edge
+  description: "vLLM-backed agent for multi-turn customer support / research tasks"
+
+# --- Inference profiles ---
+# Switch at runtime with: openshell inference set --provider <name>
+inference:
+  default_profile: vllm
+
+  profiles:
+    # --- vLLM on the local GPU instance (primary) ---
+    - name: vllm
+      provider: openai-compatible
+      endpoint: http://host.openshell.internal:8000/v1
+      model: /models/llama-3.1-8b-instruct
+      api_key_env: OPENAI_API_KEY   # defaults to "dummy" for local vLLM
+      wire_api: chat_completions
+      temperature: 0.3
+      max_tokens: 2048
+
+    # --- NVIDIA NIM fallback (experimental, requires NIM_API_KEY) ---
+    - name: nim-local
+      provider: openai-compatible
+      endpoint: http://host.openshell.internal:8001/v1
+      model: nvidia/nemotron-3-nano-30b-a3b
+      api_key_env: NIM_API_KEY
+
+    # --- Cloud fallback for complex multi-step reasoning ---
+    - name: nvidia-cloud
+      provider: nvidia
+      endpoint: https://integrate.api.nvidia.com/v1
+      model: nvidia/nemotron-3-super-120b
+      api_key_env: NVIDIA_API_KEY
+
+# --- Network policy ---
+# Sandbox blocks outbound traffic by default. Whitelist what the agent needs.
+network:
+  allowed_hosts:
+    - host.openshell.internal   # local vLLM / NIM
+    - integrate.api.nvidia.com  # NVIDIA cloud inference
+    - api.zendesk.com           # example: customer support ticket API
+  blocked_by_default: true
+
+# --- Filesystem policy ---
+filesystem:
+  read_paths:
+    - /sandbox
+    - /workspace
+    - /tmp
+  write_paths:
+    - /sandbox
+    - /tmp
+  readonly_paths:
+    - /models
+
+# --- Agent configuration ---
+agent:
+  name: support-agent
+  system_prompt_file: /workspace/prompts/customer_support.md
+  tools:
+    - name: knowledge_base_search
+      description: "Search the internal knowledge base for product docs"
+      module: tools.knowledge_base
+    - name: lookup_order
+      description: "Look up an order by ID in the order system"
+      module: tools.orders
+    - name: create_ticket
+      description: "Create a support ticket when the agent can't resolve the issue"
+      module: tools.tickets
+    - name: escalate_to_human
+      description: "Escalate to a human agent"
+      module: tools.escalation
+
+# --- Steering rules (Deep Tech tier) ---
+# Constrain the model's behavior for high-accuracy, predictable output.
+steering:
+  structured_output: true
+  enforce_tool_schema: true
+  max_tool_calls_per_turn: 3
+  fail_on_schema_violation: true

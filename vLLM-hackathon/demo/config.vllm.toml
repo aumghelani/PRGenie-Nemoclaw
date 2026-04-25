@@ -1,0 +1,59 @@
+# =============================================================================
+# ZeroClaw Config — Brev GPU Mode (vLLM)
+# Uses vLLM serving Llama 3.1 8B on a GPU instance for fast local inference.
+# Routes complex reasoning (architecture review, security audit) to Claude.
+# =============================================================================
+
+# --- Primary provider: vLLM (OpenAI-compatible endpoint) ---
+default_provider = "vllm"
+default_model = "/models/llama-3.1-8b-instruct"
+api_url = "http://localhost:8000/v1"
+default_temperature = 0.2
+
+# --- Reliability: fall back to cloud if vLLM is down ---
+[reliability]
+provider_retries = 2
+provider_backoff_ms = 500
+fallback_providers = ["anthropic"]
+
+# --- Model routing ---
+# hint:local  → vLLM (code completion, explanation, refactoring)
+# hint:reasoning → Anthropic Claude (architecture review, security audit)
+
+[[model_routes]]
+hint = "local"
+provider = "vllm"
+model = "/models/llama-3.1-8b-instruct"
+
+[[model_routes]]
+hint = "reasoning"
+provider = "anthropic"
+model = "claude-sonnet-4-20250514"
+
+# --- Automatic query classification ---
+# Same routing rules as the Ollama config — complex tasks go to cloud.
+
+[[query_classification]]
+keywords = ["architecture", "design pattern", "system design", "trade-off", "scalability"]
+patterns = ["review the architecture", "design review"]
+min_length = 100
+priority = 1
+hint = "reasoning"
+
+[[query_classification]]
+keywords = ["security", "vulnerability", "CVE", "injection", "audit", "OWASP"]
+patterns = ["security audit", "security review", "find vulnerabilities"]
+priority = 1
+hint = "reasoning"
+
+[[query_classification]]
+keywords = ["debug", "stack trace", "multi-file", "root cause"]
+patterns = ["why is this failing", "trace the bug across"]
+min_length = 150
+priority = 2
+hint = "reasoning"
+
+# --- Memory ---
+[memory]
+backend = "sqlite"
+embedding_model = "local"

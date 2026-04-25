@@ -1,0 +1,59 @@
+# =============================================================================
+# ZeroClaw Config — Laptop Mode (Ollama)
+# Runs a quantized Llama 3.1 8B locally for most coding tasks.
+# Routes complex reasoning (architecture review, security audit) to Claude.
+# =============================================================================
+
+# --- Primary provider: local Ollama ---
+default_provider = "ollama"
+default_model = "llama3.1:8b-q4_K_M"
+api_url = "http://localhost:11434"
+default_temperature = 0.2
+
+# --- Reliability: fall back to cloud if local model fails ---
+[reliability]
+provider_retries = 2
+provider_backoff_ms = 500
+fallback_providers = ["anthropic"]
+
+# --- Model routing ---
+# hint:local  → Ollama (code completion, explanation, refactoring)
+# hint:reasoning → Anthropic Claude (architecture review, security audit)
+
+[[model_routes]]
+hint = "local"
+provider = "ollama"
+model = "llama3.1:8b-q4_K_M"
+
+[[model_routes]]
+hint = "reasoning"
+provider = "anthropic"
+model = "claude-sonnet-4-20250514"
+
+# --- Automatic query classification ---
+# Messages matching these patterns route to the cloud model automatically.
+
+[[query_classification]]
+keywords = ["architecture", "design pattern", "system design", "trade-off", "scalability"]
+patterns = ["review the architecture", "design review"]
+min_length = 100
+priority = 1
+hint = "reasoning"
+
+[[query_classification]]
+keywords = ["security", "vulnerability", "CVE", "injection", "audit", "OWASP"]
+patterns = ["security audit", "security review", "find vulnerabilities"]
+priority = 1
+hint = "reasoning"
+
+[[query_classification]]
+keywords = ["debug", "stack trace", "multi-file", "root cause"]
+patterns = ["why is this failing", "trace the bug across"]
+min_length = 150
+priority = 2
+hint = "reasoning"
+
+# --- Memory ---
+[memory]
+backend = "sqlite"
+embedding_model = "local"

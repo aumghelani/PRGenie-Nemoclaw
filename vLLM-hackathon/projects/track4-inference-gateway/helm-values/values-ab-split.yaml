@@ -1,0 +1,53 @@
+# Canary deploy — same model name, two backend pools (v1 stable, v2 candidate).
+# The gateway splits traffic by weight. Shift the weights at runtime with:
+#   bash scripts/shift_traffic.sh <v1-weight> <v2-weight>
+
+gateway:
+  enabled: true
+  serviceType: ClusterIP
+  routes:
+    - name: llama-8b-canary-route
+      match:
+        model: "meta-llama/Llama-3.1-8B-Instruct"
+      # Weighted backends — same model, two pools.
+      weightedBackends:
+        - backend: llama-8b-v1
+          weight: 80
+        - backend: llama-8b-v2
+          weight: 20
+
+scheduler:
+  enabled: true
+  kvCacheAwareRouting: true
+
+modelPools:
+  # --- v1: current stable ---
+  - name: llama-8b-v1
+    model:
+      name: "meta-llama/Llama-3.1-8B-Instruct"
+      localPath: "/models/llama-3.1-8b-instruct"
+    vllm:
+      replicas: 3
+      image: "vllm/vllm-openai:v0.9.0"     # pin to the known-good version
+      resources:
+        limits:
+          nvidia.com/gpu: 1
+      extraArgs:
+        - "--max-model-len=8192"
+        - "--gpu-memory-utilization=0.85"
+
+  # --- v2: candidate (newer vLLM, same weights) ---
+  - name: llama-8b-v2
+    model:
+      name: "meta-llama/Llama-3.1-8B-Instruct"
+      localPath: "/models/llama-3.1-8b-instruct"
+    vllm:
+      replicas: 1                          # smaller footprint while in canary
+      image: "vllm/vllm-openai:latest"     # new version under test
+      resources:
+        limits:
+          nvidia.com/gpu: 1
+      extraArgs:
+        - "--max-model-len=8192"
+        - "--gpu-memory-utilization=0.85"
+        - "--enable-chunked-prefill"       # example new feature we're testing

@@ -1,0 +1,66 @@
+{
+  "title": "vLLM Performance",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "5s",
+  "time": {"from": "now-15m", "to": "now"},
+  "panels": [
+    {
+      "id": 1,
+      "title": "Requests in flight",
+      "type": "stat",
+      "targets": [{"expr": "vllm:num_requests_running", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "title": "Queue depth",
+      "type": "stat",
+      "targets": [{"expr": "vllm:num_requests_waiting", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+    },
+    {
+      "id": 3,
+      "title": "GPU KV-cache usage %",
+      "type": "gauge",
+      "targets": [{"expr": "vllm:gpu_cache_usage_perc * 100", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}
+    },
+    {
+      "id": 4,
+      "title": "Prefix cache hit rate",
+      "type": "gauge",
+      "targets": [{"expr": "rate(vllm:gpu_prefix_cache_hit_tokens_total[5m]) / clamp_min(rate(vllm:gpu_prefix_cache_query_tokens_total[5m]), 1)", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}
+    },
+    {
+      "id": 5,
+      "title": "Time to first token (TTFT) p50/p99",
+      "type": "timeseries",
+      "targets": [
+        {"expr": "histogram_quantile(0.50, rate(vllm:time_to_first_token_seconds_bucket[1m]))", "refId": "p50", "legendFormat": "p50"},
+        {"expr": "histogram_quantile(0.99, rate(vllm:time_to_first_token_seconds_bucket[1m]))", "refId": "p99", "legendFormat": "p99"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}
+    },
+    {
+      "id": 6,
+      "title": "Output tokens per second",
+      "type": "timeseries",
+      "targets": [
+        {"expr": "rate(vllm:generation_tokens_total[1m])", "refId": "A"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4}
+    },
+    {
+      "id": 7,
+      "title": "End-to-end latency p50/p99",
+      "type": "timeseries",
+      "targets": [
+        {"expr": "histogram_quantile(0.50, rate(vllm:e2e_request_latency_seconds_bucket[1m]))", "refId": "p50", "legendFormat": "p50"},
+        {"expr": "histogram_quantile(0.99, rate(vllm:e2e_request_latency_seconds_bucket[1m]))", "refId": "p99", "legendFormat": "p99"}
+      ],
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12}
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "workloads": [
+    {
+      "name": "short_chat",
+      "description": "Short conversational exchanges (typical chatbot usage)",
+      "max_tokens": 64,
+      "prompts": [
+        "What is the capital of France?",
+        "Explain Python list comprehensions in two sentences.",
+        "What's the difference between a stack and a queue?",
+        "Convert 72 degrees Fahrenheit to Celsius.",
+        "Name three benefits of open-source software."
+      ]
+    },
+    {
+      "name": "long_generation",
+      "description": "Longer-form text generation (articles, explanations)",
+      "max_tokens": 512,
+      "prompts": [
+        "Write a detailed explanation of how neural networks learn through backpropagation.",
+        "Describe the architecture of a modern web application, covering frontend, backend, and database layers.",
+        "Explain the CAP theorem and its implications for distributed database design.",
+        "Write a tutorial on setting up a CI/CD pipeline for a Python project.",
+        "Describe the history and evolution of container orchestration from Docker Swarm to Kubernetes."
+      ]
+    },
+    {
+      "name": "code_completion",
+      "description": "Code generation tasks (high draft acceptance expected)",
+      "max_tokens": 256,
+      "prompts": [
+        "Write a Python function that implements binary search on a sorted list. Include docstring and type hints.",
+        "Write a Python class for a thread-safe LRU cache with get and put methods.",
+        "Write a bash script that monitors disk usage and sends an alert if any partition exceeds 90%.",
+        "Write a Python function that validates an email address using regex, handling edge cases.",
+        "Write a REST API endpoint in FastAPI that accepts a JSON body, validates it with Pydantic, and returns a processed response."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+# =============================================================================
+# Infinite Scale — Autoscaling Policies
+#
+# HorizontalPodAutoscalers for the prefill and decode pools.
+# These scale based on custom Prometheus metrics exposed by vLLM/llm-d.
+# =============================================================================
+
+---
+# Prefill pool autoscaler
+# Scales based on pending request queue depth — prefill is compute-bound,
+# so high queue depth means we need more prefill capacity.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: llm-d-prefill-hpa
+  namespace: llm-d
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: llm-d-prefill
+  minReplicas: 1
+  maxReplicas: 2
+  metrics:
+    # Scale on GPU utilization
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # Scale on custom vLLM metric: pending requests in queue
+    - type: Pods
+      pods:
+        metric:
+          name: vllm_num_requests_waiting
+        target:
+          type: AverageValue
+          averageValue: "5"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 120
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+
+---
+# Decode pool autoscaler
+# Scales based on KV-cache utilization — decode is memory-bound,
+# so high cache pressure means we need more decode capacity.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: llm-d-decode-hpa
+  namespace: llm-d
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: llm-d-decode
+  minReplicas: 1
+  maxReplicas: 2
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # Scale on custom vLLM metric: KV-cache utilization percentage
+    - type: Pods
+      pods:
+        metric:
+          name: vllm_gpu_cache_usage_perc
+        target:
+          type: AverageValue
+          averageValue: "0.80"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 180
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 180

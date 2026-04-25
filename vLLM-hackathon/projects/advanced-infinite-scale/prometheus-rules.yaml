@@ -1,0 +1,94 @@
+# =============================================================================
+# Infinite Scale — Prometheus Monitoring Rules
+#
+# Custom recording rules and alerts for monitoring disaggregated inference.
+# These track vLLM metrics exposed at /metrics on each serving pod.
+# =============================================================================
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: llm-d-inference-rules
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    # --- Recording rules for dashboards ---
+    - name: llm-d-inference
+      interval: 15s
+      rules:
+        # Aggregate throughput across all decode pods
+        - record: llm_d:throughput:tokens_per_second
+          expr: |
+            sum(rate(vllm_generation_tokens_total[1m]))
+
+        # Average time-to-first-token across prefill pods
+        - record: llm_d:ttft:avg_seconds
+          expr: |
+            avg(vllm_time_to_first_token_seconds)
+
+        # Average KV-cache utilization across decode pods
+        - record: llm_d:kv_cache:avg_utilization
+          expr: |
+            avg(vllm_gpu_cache_usage_perc)
+
+        # Request queue depth (waiting requests)
+        - record: llm_d:queue:total_waiting
+          expr: |
+            sum(vllm_num_requests_waiting)
+
+        # Active requests being processed
+        - record: llm_d:requests:active
+          expr: |
+            sum(vllm_num_requests_running)
+
+    # --- Alerts ---
+    - name: llm-d-alerts
+      rules:
+        # High queue depth — requests are piling up
+        - alert: HighRequestQueueDepth
+          expr: llm_d:queue:total_waiting > 10
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High request queue depth"
+            description: >
+              {{ $value }} requests waiting in queue for over 1 minute.
+              Consider scaling the prefill pool.
+
+        # KV-cache pressure — decode pool running low on memory
+        - alert: HighKVCacheUtilization
+          expr: llm_d:kv_cache:avg_utilization > 0.90
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "KV-cache utilization above 90%"
+            description: >
+              Average KV-cache utilization is {{ $value | humanizePercentage }}.
+              Decode pool may need to scale or evict sequences.
+
+        # TTFT spike — prefill is becoming a bottleneck
+        - alert: HighTimeToFirstToken
+          expr: llm_d:ttft:avg_seconds > 5
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Time-to-first-token exceeds 5s"
+            description: >
+              Average TTFT is {{ $value }}s. Prefill pool may be overloaded.
+
+        # Throughput drop — fewer tokens generated than expected
+        - alert: LowThroughput
+          expr: llm_d:throughput:tokens_per_second < 10
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Token generation throughput critically low"
+            description: >
+              Aggregate throughput is {{ $value }} tokens/sec, which is
+              below the 10 tok/s threshold for 3+ minutes.

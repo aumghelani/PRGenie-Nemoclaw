@@ -1,0 +1,52 @@
+# Multi-model deployment behind a single llm-d Inference Gateway.
+# Two distinct models, each in its own pool, routed by the `model` field.
+
+gateway:
+  enabled: true
+  serviceType: ClusterIP
+  # Route requests based on the `model` field in the request body.
+  routes:
+    - name: llama-8b-route
+      match:
+        model: "meta-llama/Llama-3.1-8B-Instruct"
+      backend: llama-8b-pool
+    - name: llama-8b-fp8-route
+      match:
+        model: "RedHatAI/Meta-Llama-3.1-8B-Instruct-FP8"
+      backend: llama-8b-fp8-pool
+
+scheduler:
+  enabled: true
+  kvCacheAwareRouting: true
+
+# --- Pool 1: FP16 Llama 3.1 8B ---
+modelPools:
+  - name: llama-8b-pool
+    model:
+      name: "meta-llama/Llama-3.1-8B-Instruct"
+      localPath: "/models/llama-3.1-8b-instruct"
+    vllm:
+      replicas: 2
+      resources:
+        limits:
+          nvidia.com/gpu: 1
+      extraArgs:
+        - "--max-model-len=8192"
+        - "--gpu-memory-utilization=0.85"
+        - "--enable-prefix-caching"
+
+  # --- Pool 2: FP8 Llama 3.1 8B (same architecture, different quant) ---
+  - name: llama-8b-fp8-pool
+    model:
+      name: "RedHatAI/Meta-Llama-3.1-8B-Instruct-FP8"
+      localPath: "/models/meta-llama-3.1-8b-instruct-fp8"
+    vllm:
+      replicas: 2
+      resources:
+        limits:
+          nvidia.com/gpu: 1
+      extraArgs:
+        - "--max-model-len=8192"
+        - "--gpu-memory-utilization=0.85"
+        - "--enable-prefix-caching"
+        - "--quantization=fp8"

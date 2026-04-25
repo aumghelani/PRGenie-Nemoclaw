@@ -1,0 +1,23 @@
+# GuideLLM scenario: short interactive chat
+# Representative of chatbot / Q&A workloads
+target: http://localhost:8000/v1
+model: /models/llama-3.1-8b-instruct
+
+rate_type: concurrent
+rate: [1, 4, 16, 32]           # concurrent requests; sweeps to find the knee
+duration: 60                    # seconds per rate point
+
+data:
+  prompt_tokens: 128            # short prompts
+  output_tokens: 128
+  samples: 256
+
+metrics:
+  - time_to_first_token
+  - time_per_output_token
+  - requests_per_second
+  - output_tokens_per_second
+  - queue_wait_p99
+
+output:
+  file: results/chat.json

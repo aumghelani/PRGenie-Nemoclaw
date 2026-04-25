@@ -1,0 +1,26 @@
+groups:
+  - name: vllm_perf
+    rules:
+      - alert: HighP99Latency
+        expr: histogram_quantile(0.99, rate(vllm:e2e_request_latency_seconds_bucket[1m])) > 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "vLLM p99 end-to-end latency above 2s"
+
+      - alert: LowKvCacheHitRate
+        expr: rate(vllm:gpu_prefix_cache_hit_tokens_total[5m]) / clamp_min(rate(vllm:gpu_prefix_cache_query_tokens_total[5m]), 1) < 0.3
+        for: 2m
+        labels:
+          severity: info
+        annotations:
+          summary: "Prefix cache hit rate < 30% — consider prefix-cache-aware routing"
+
+      - alert: QueueDepthGrowing
+        expr: vllm:num_requests_waiting > 32
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "vLLM queue depth > 32 — add capacity or reduce --max-num-seqs"
