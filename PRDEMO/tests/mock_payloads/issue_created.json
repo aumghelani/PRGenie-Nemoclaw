@@ -1,0 +1,42 @@
+{
+  "action": "opened",
+  "issue": {
+    "number": 88,
+    "state": "open",
+    "title": "Login fails for users with email containing '+' character",
+    "body": "When a user tries to log in with an email like 'a+b@example.com', the request 500s.",
+    "user": {
+      "login": "bug-finder",
+      "id": 7777
+    },
+    "labels": [
+      {"name": "bug", "color": "d73a4a"}
+    ],
+    "comments": 3,
+    "reactions": {
+      "url": "",
+      "total_count": 12,
+      "+1": 9,
+      "-1": 0,
+      "laugh": 0,
+      "hooray": 0,
+      "confused": 0,
+      "heart": 3,
+      "rocket": 0,
+      "eyes": 0
+    },
+    "created_at": "2026-04-20T10:00:00Z",
+    "updated_at": "2026-04-24T18:00:00Z",
+    "html_url": "https://github.com/acme/widgets/issues/88"
+  },
+  "repository": {
+    "id": 1234567,
+    "name": "widgets",
+    "full_name": "acme/widgets",
+    "owner": {"login": "acme", "type": "Organization"},
+    "private": false,
+    "default_branch": "main"
+  },
+  "sender": {"login": "bug-finder", "id": 7777},
+  "installation": {"id": 55555555}
+}

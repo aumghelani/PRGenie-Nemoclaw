@@ -1,0 +1,25 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    GITHUB_APP_ID: str = ""
+    GITHUB_PRIVATE_KEY_PATH: str = "./github-app.pem"
+    GITHUB_WEBHOOK_SECRET: str = "dev_secret_change_me"
+
+    # Defaults match agentbench-live/vllm_setup scripts (port 5000, served-name "nemotron").
+    # Override with Brev IP via .env when the GPU instance is up.
+    VLLM_BASE_URL: str = "http://localhost:5000/v1"
+    VLLM_MODEL: str = "nemotron"
+    ENABLE_NVEXT_HEADERS: bool = True
+    MOCK_MODE: bool = True
+    LLM_TEMPERATURE: float = 0.3
+    LLM_MAX_TOKENS: int = 1024
+    LLM_TIMEOUT_SECONDS: float = 60.0
+
+    DATABASE_URL: str = "sqlite:///./prdemo.db"
+    PORT: int = 8080
+
+
+settings = Settings()

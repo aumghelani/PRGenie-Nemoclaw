@@ -1,0 +1,27 @@
+{
+  "action": "created",
+  "issue": {
+    "number": 42,
+    "state": "open",
+    "title": "Add Redis-backed caching to /users endpoint",
+    "pull_request": {
+      "url": "https://api.github.com/repos/acme/widgets/pulls/42",
+      "html_url": "https://github.com/acme/widgets/pull/42"
+    },
+    "user": {"login": "octocontributor", "id": 9001}
+  },
+  "comment": {
+    "id": 123456789,
+    "body": "/prclaw review",
+    "user": {"login": "maintainer-jane", "id": 2222},
+    "created_at": "2026-04-25T13:30:00Z"
+  },
+  "repository": {
+    "id": 1234567,
+    "name": "widgets",
+    "full_name": "acme/widgets",
+    "owner": {"login": "acme", "type": "Organization"}
+  },
+  "sender": {"login": "maintainer-jane", "id": 2222},
+  "installation": {"id": 55555555}
+}

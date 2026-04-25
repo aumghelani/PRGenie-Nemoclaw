@@ -1,0 +1,45 @@
+{
+  "action": "opened",
+  "number": 42,
+  "pull_request": {
+    "number": 42,
+    "state": "open",
+    "title": "Add Redis-backed caching to /users endpoint",
+    "body": "Caches user lookups in Redis to reduce DB load.\n\nFixes #38.",
+    "user": {
+      "login": "octocontributor",
+      "id": 9001,
+      "type": "User"
+    },
+    "additions": 142,
+    "deletions": 18,
+    "changed_files": 4,
+    "head": {
+      "ref": "feat/redis-cache",
+      "sha": "abc123def4567890abcdef1234567890abcdef12"
+    },
+    "base": {
+      "ref": "main",
+      "sha": "deadbeef12345678abcdef1234567890abcdef12"
+    },
+    "html_url": "https://github.com/acme/widgets/pull/42"
+  },
+  "repository": {
+    "id": 1234567,
+    "name": "widgets",
+    "full_name": "acme/widgets",
+    "owner": {
+      "login": "acme",
+      "type": "Organization"
+    },
+    "private": false,
+    "default_branch": "main"
+  },
+  "sender": {
+    "login": "octocontributor",
+    "id": 9001
+  },
+  "installation": {
+    "id": 55555555
+  }
+}
