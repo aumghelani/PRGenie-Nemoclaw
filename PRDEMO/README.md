@@ -293,6 +293,213 @@ The policy lives in **`.github/prgenie.yml`** of the target repo. PRGenie fetche
 
 ---
 
+## Tech stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| **LLM model** | `nvidia/nemotron-3-super-120b-a12b` (or `meta/llama-3.3-70b-instruct` fallback) | Tool-calling support, strong instruction following, hosted on NVIDIA NIM |
+| **LLM serving** | NVIDIA NIM (cloud) or vLLM 0.6+ on Brev GPU | OpenAI-compatible API; Track 5 prefix caching + FP8 KV cache + tool-calling parser (`qwen3_coder`) |
+| **Policy runtime** | NVIDIA **NemoClaw** v0.0.7 + OpenShell sandbox | Track 5 requirement; YAML-driven policy enforcement, hard-forbidden actions, sandbox isolation |
+| **Steering** | nvext request headers (`x-nvext-priority`, `predicted-osl`, `latency-sensitive`, `request-class`) | NAT middleware reads these to schedule + prioritize |
+| **Backend** | FastAPI + Python 3.11+ | Async webhook handling, OpenAPI docs free |
+| **HTTP client** | `httpx` (async) | Used for raw GitHub REST + tunneling LLM calls |
+| **GitHub** | `PyGitHub` available, but mostly direct REST via `httpx` | Bearer (PAT) or GitHub App JWT installation tokens |
+| **LLM client** | `openai` Python SDK (AsyncOpenAI) | Speaks OpenAI Chat Completions, points at NVIDIA cloud or local vLLM |
+| **DB** | SQLite + `SQLModel` | Zero-config; persona / trust / PR analysis / issue scores |
+| **Auth** | `cryptography` + `PyJWT` (RS256) | GitHub App JWT generation (when not using PAT) |
+| **HMAC** | stdlib `hmac` + `hashlib` (SHA-256, constant-time compare) | Webhook signature verification |
+| **Policy YAML** | `pyyaml` + `pydantic` | Schema-validated `.github/prgenie.yml` |
+| **CLI** | `click` + `rich` | Pretty terminal output for `triage-pr` and `repo-pulse` |
+| **Dashboard** | Single HTML file + Tailwind CDN + Chart.js + marked.js | Zero build step; served by FastAPI from `/static/dashboard.html` |
+| **Tests** | `pytest` + `pytest-asyncio` (126 tests) | In-process via `httpx.ASGITransport`, in-memory SQLite |
+
+---
+
+## How each agent scores its output (the math)
+
+Every signal is **behavior-only** — NemoClaw forbids `use_identity_signals`, so name/org/photo/nationality never enter any formula.
+
+### Trust Scorer (Receptionist)
+
+```
+trust_score = merge_rate     × 0.40       # merged_prs / total_prs in this repo
+            + response_score × 0.30       # min(1.0, 24 / avg_response_hours)
+            + resolution_rate × 0.20      # resolved_changes / total_requested_changes
+            + age_score      × 0.10       # min(1.0, account_age_days / 365)
+clamped to [0.0, 1.0]
+```
+
+**Mapping:**
+- `total_prs == 0` → `new` (always — first-contact wins regardless of score)
+- `score ≥ 0.75` → `high`
+- `score ≥ 0.45` → `medium`
+- otherwise → `flagged`
+
+**Cache:** updated value reused for `cache_hours` (default 24) before re-fetching from GitHub.
+
+### Risk Agent (Triage Nurse)
+
+```
+base_risk =
+    +0.4 if any changed file path matches DEFAULT_SENSITIVE_PATHS
+         (auth/, crypto/, requirements.txt, .github/workflows/, migrations/, …)
+         OR matches policy.risk.escalate_on patterns
+    +0.2 if (additions + deletions) > 500
+    +0.2 if (additions + deletions) > 1000        # cumulative — huge diffs get +0.4
+    +0.3 if trust_level == "new"
+    +0.5 if trust_level == "flagged"
+clamped to [0.0, 1.0]
+```
+
+**Mapping:** `≥ 0.8` critical · `≥ 0.5` high · `≥ 0.25` medium · else low.
+
+**Escalation rule (NemoClaw-enforced):** `should_escalate = risk ∈ {high, critical} AND trust ∈ {new, flagged}`. Diff size alone never escalates a trusted contributor.
+
+### Reviewer Suggester (Specialist Referrer)
+
+For each of the first 10 changed files:
+```
+ownership[author] += 1 / total_commits_on_file        # per commit on that file
+```
+Sum across all files, drop the PR author, return top login. Returns `None` when only new files.
+
+### Issue Demand Agent (Public Health Officer)
+
+```
+demand_score    = reactions × 0.4
+                + unique_commenters × 0.3
+                + min(days_open / 30, 1.0) × 0.2
+                + label_weight × 0.1                  # security=1.5, bug=1.3, default=1.0
+neglect_score   = days_since_maintainer_response / 7
+priority_score  = demand_score × max(1.0, neglect_score)
+```
+
+**Mapping:** `≥ 8.0` high · `≥ 3.0` medium · else low.
+**Trust-neutral**: scoring never looks at *who* opened the issue — only community engagement.
+
+### Persona Extractor (Patient Profiler)
+
+One LLM call per maintainer per week (cached). Reads up to 50 of their recent reviews, asks Nemotron via the `submit_persona` tool to extract:
+```
+{
+  focus: list[str]                         # what they care about most
+  strictness: 0.0–1.0
+  tone: str                                # one phrase
+  avg_comments_per_pr: float
+  common_phrases: list[str]                # exact verbatim quotes
+  tolerance: { missing_tests, style_issues, performance, docs: low|medium|high }
+}
+```
+The output is fed into Triage's prompt + Review Commenter's voice.
+
+### Triage Agent (Lead Doctor)
+
+One LLM call per PR. Combines persona + trust + risk + diff (head 1500 + tail 1500 chars), forces `submit_triage` tool call:
+```
+{ summary, priority, concerns[], checklist[], suggested_action }
+```
+`suggested_action` ∈ {approve, request_changes, comment, escalate}. **`merge` and `close` are not allowed** — schema-enforced + hard-forbidden in NemoClaw.
+
+### Review Commenter (Senior Consultant)
+
+Only runs when a human types `/prgenie review` (NemoClaw gates `can_submit_review(triggered_by_command=True)`). Generates inline comments grounded in the cached triage `concerns`. Each comment is filtered through `validate_review_comment(...)` — empty bodies or harsh-language matches are dropped (logged in `dropped[]`).
+**Verdict can only be `COMMENT` or `REQUEST_CHANGES`** — `APPROVE` is hard-coded out.
+
+---
+
+## NemoClaw integration in detail
+
+| Where NemoClaw runs | What it gates | How it's enforced |
+|---|---|---|
+| Repo's `.github/prgenie.yml` (Pydantic-validated) | Persona thresholds, label auto-apply, escalation rules, demand thresholds | `PolicyEnforcer.from_repo()` — fetched per-event, deep-merged over `DEFAULT_POLICY` |
+| Hard-forbidden list (compile-time, in `nemo_claw/schemas.py`) | `merge_pr`, `close_pr`, `close_issue`, `reject_contributor`, `post_without_ai_disclosure`, `use_identity_signals`, `dismiss_human_review`, `bypass_required_checks`, `assign_yourself_as_reviewer` | YAML can ADD to the forbidden set, never REMOVE |
+| Comment posting | Every comment must include "PRGenie" / "AI-assisted" / "🤖" disclosure marker | `policy.assert_disclosure(body)` raises `NemoClawViolation` if missing |
+| Label application | `auto_label: true` per agent (trust / risk / demand) | `policy.can_apply_label("trust:high")` checked before `add_labels()` |
+| Review submission | Only on `/prgenie review` from a human | `policy.can_submit_review(triggered_by_command=True)` |
+| Inline review comments | No harsh language, no empty bodies | `policy.validate_review_comment(body) → (is_valid, reason)`; rejects accumulate in `dropped[]` |
+| Inference path (when running inside the OpenShell sandbox) | All LLM calls flow through NemoClaw's local OpenAI proxy → NVIDIA NIM cloud | Sandbox provisioned via `nemoclaw onboard` |
+
+---
+
+## Track 5 inference-efficiency story
+
+PRGenie targets the **Inference Efficiency Impact** scoring criterion (4 of 20 points) with three concrete techniques:
+
+| Technique | What it costs us to enable | Measured win |
+|---|---|---|
+| **OpenAI tool-calling** instead of "ask the model for JSON in prose" | 1 system prompt schema per agent | 1 LLM call per PR instead of 4 (summary, concerns, checklist, action separately) → **~4× fewer calls** |
+| **Prefix caching** — `SYSTEM_TRIAGE`, `SYSTEM_PERSONA`, `SYSTEM_REVIEW` are stable across calls | Just keep system prompts identical | First call after Triage benefits from cache hit on the system prefix → **~340 ms saved per call** on optimized vLLM |
+| **nvext steering headers** routed by NAT middleware | One header dict per call (`build_nvext_headers()`) | Triage = `agent.first` / `priority=high`; Persona = `agent.background` / `priority=low`; Cluster = `agent.batch` / `priority=low` → NAT scheduler can deprioritize background work |
+
+The dashboard's **🆚 PRGenie vs naive** chart visualizes these wins live: PRGenie's per-call latency + token usage vs a hand-baked baseline ("4 separate prompts, no caching, no nvext").
+
+---
+
+## Demo surfaces
+
+### 1. Web dashboard (`http://localhost:8080/`)
+
+Run:
+```bash
+./.venv/Scripts/python.exe -m uvicorn backend.main:app --port 8080
+```
+
+The dashboard:
+- 7 agent cards animate in sequence as the pipeline runs
+- Trust / Risk / Priority / Reviewer status badges
+- LLM-extracted maintainer persona (focus + tone + phrases)
+- Markdown-rendered bot comment preview
+- ⚡ LLM call metrics (per-call latency + tokens, total tokens)
+- 🆚 PRGenie-vs-naive Chart.js bar chart (calls / tokens / latency)
+- 🛡️ NemoClaw forbidden-actions display
+
+The repo input field accepts `owner/repo` **or** a full GitHub URL (`https://github.com/owner/repo` or even `.../pull/N`).
+
+### 2. CLI
+
+```bash
+# Triage a real PR
+./.venv/Scripts/python.exe -m backend.cli triage-pr owner/repo 42 --dry-run
+./.venv/Scripts/python.exe -m backend.cli triage-pr owner/repo 42       # actually posts comment + labels
+
+# Issue demand + maintainer health signals
+./.venv/Scripts/python.exe -m backend.cli repo-pulse owner/repo --limit 30
+```
+
+### 3. HTTP API
+
+| Method + Path | Purpose |
+|---|---|
+| `GET /` | Dashboard HTML |
+| `GET /health` | `{"status": "ok", "service": "prgenie"}` |
+| `GET /api/info` | `{"service", "mock_mode", "model"}` |
+| `POST /api/triage` | Body: `{"repo": "owner/repo", "pr_number": int, "dry_run": bool}`. Returns full triage dict + metrics |
+| `POST /webhook` | GitHub webhook receiver (HMAC-verified). Routes to PR / issue / `/prgenie review` handlers |
+
+---
+
+## Environment variables (`.env`)
+
+| Variable | Default | Notes |
+|---|---|---|
+| `MOCK_MODE` | `true` | Master switch — affects both GitHub + LLM clients |
+| `GITHUB_MOCK_MODE` | (inherits MOCK_MODE) | Override: keep GitHub mocked even when LLM is live |
+| `LLM_MOCK_MODE` | (inherits MOCK_MODE) | Override: keep LLM mocked even when GitHub is live |
+| `GITHUB_PAT` | `""` | Personal Access Token — when set, bypasses GitHub App JWT auth (demo-friendly) |
+| `GITHUB_APP_ID` | `""` | For full GitHub App mode |
+| `GITHUB_PRIVATE_KEY_PATH` | `./github-app.pem` | RSA private key for App JWT |
+| `GITHUB_WEBHOOK_SECRET` | `dev_secret_change_me` | HMAC-SHA256 secret for `/webhook` |
+| `VLLM_BASE_URL` | `http://localhost:5000/v1` | Override to `https://integrate.api.nvidia.com/v1` for NVIDIA cloud |
+| `VLLM_MODEL` | `nemotron` | Or `nvidia/nemotron-3-super-120b-a12b` / `meta/llama-3.3-70b-instruct` |
+| `VLLM_API_KEY` | `not-needed` | Set to `nvapi-...` NGC key when hitting NVIDIA cloud |
+| `ENABLE_NVEXT_HEADERS` | `true` | Set false for NVIDIA cloud (it rejects unknown headers); true for local NemoClaw / vLLM |
+| `LLM_TEMPERATURE` | `0.3` | Lower = more deterministic |
+| `LLM_MAX_TOKENS` | `1024` | Per LLM call |
+| `LLM_TIMEOUT_SECONDS` | `60.0` | Per LLM call |
+| `DATABASE_URL` | `sqlite:///./prdemo.db` | SQLModel engine URL |
+
+---
+
 ## File map
 
 ```
