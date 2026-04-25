@@ -80,7 +80,7 @@ async def analyze_pr(
 TRUST_EMOJI = {"high": "🟢", "medium": "🟡", "new": "⚪", "flagged": "🔴"}
 RISK_EMOJI = {"low": "🟢", "medium": "🟡", "high": "🔴", "critical": "🚨"}
 
-PR_TRIAGE_COMMENT = """## 🤖 PRClaw Analysis
+PR_TRIAGE_COMMENT = """## 🤖 PRGenie Analysis
 
 |  |  |
 |---|---|
@@ -99,8 +99,8 @@ PR_TRIAGE_COMMENT = """## 🤖 PRClaw Analysis
 {checklist_items}
 
 ---
-*Type `/prclaw review` to post inline review comments in this maintainer's voice.*
-*AI-assisted analysis · Powered by [PRClaw](https://github.com/prclaw) · Policy: `.github/prclaw.yml`*
+*Type `/prgenie review` to post inline review comments in this maintainer's voice.*
+*AI-assisted analysis · Powered by [PRGenie](https://github.com/prclaw) · Policy: `.github/prgenie.yml`*
 """
 
 

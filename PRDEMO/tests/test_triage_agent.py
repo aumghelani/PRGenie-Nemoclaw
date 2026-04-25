@@ -82,7 +82,7 @@ def test_format_triage_comment_includes_disclosure():
     }
     body = format_triage_comment(analysis, trust, risk, "maintainer-jane")
     # NemoClaw will check for AI disclosure markers.
-    assert "PRClaw" in body
+    assert "PRGenie" in body
     assert "AI-assisted" in body
     # Trust + risk visible.
     assert "medium" in body

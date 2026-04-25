@@ -19,7 +19,7 @@ from backend.github_client import (
     GitHubClient,
     MOCK_OPEN_ISSUES,
     MOCK_PR_FILES,
-    MOCK_PRCLAW_YML,
+    MOCK_PRGENIE_YML,
     RecordedCall,
 )
 
@@ -129,9 +129,9 @@ async def test_get_user_returns_account(client: GitHubClient):
     assert "created_at" in u
 
 
-async def test_get_repo_file_returns_prclaw_yml(client: GitHubClient):
-    yml = await client.get_repo_file(REPO, ".github/prclaw.yml", INSTALLATION_ID)
-    assert yml == MOCK_PRCLAW_YML
+async def test_get_repo_file_returns_prgenie_yml(client: GitHubClient):
+    yml = await client.get_repo_file(REPO, ".github/prgenie.yml", INSTALLATION_ID)
+    assert yml == MOCK_PRGENIE_YML
     assert "forbidden" in yml
 
 

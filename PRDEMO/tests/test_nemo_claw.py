@@ -125,7 +125,7 @@ def test_validate_review_comment_accepts_constructive():
 
 def test_assert_disclosure_passes_with_marker():
     p = PolicyEnforcer(DEFAULT_POLICY)
-    p.assert_disclosure("🤖 PRClaw analysis ready.")  # no raise
+    p.assert_disclosure("🤖 PRGenie analysis ready.")  # no raise
 
 
 def test_assert_disclosure_raises_without_marker():

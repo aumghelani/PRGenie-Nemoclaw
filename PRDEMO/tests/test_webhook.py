@@ -87,7 +87,7 @@ async def test_webhook_issue_opened_dispatches(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_webhook_command_dispatches(client: AsyncClient):
-    """`/prclaw review` returns one of the review-handler outcomes
+    """`/prgenie review` returns one of the review-handler outcomes
     (review_submitted if cached analysis exists, review_no_analysis otherwise)."""
     body = (PAYLOAD_DIR / "issue_comment_command.json").read_bytes()
     r = await _post(client, body, event="issue_comment", sig=sign(body))

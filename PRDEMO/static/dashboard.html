@@ -3,42 +3,95 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PRClaw — GitHub-native PR triage</title>
+<title>PRGenie — Your wish for clean PRs, granted.</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-  .glow { box-shadow: 0 0 24px rgba(118, 185, 0, 0.18); }
-  .agent-card { transition: all .25s ease; }
-  .agent-card.running { animation: pulse 1.4s infinite; }
-  .agent-card.done { border-color: #76b900; }
-  @keyframes pulse {
+  code, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  /* Animated gradient background */
+  .grad-bg {
+    background: radial-gradient(circle at 20% 0%, rgba(118, 185, 0, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 80% 100%, rgba(168, 85, 247, 0.08) 0%, transparent 40%),
+                #09090b;
+  }
+
+  /* Glow effects */
+  .glow-green { box-shadow: 0 0 32px rgba(118, 185, 0, 0.18); }
+  .glow-purple { box-shadow: 0 0 32px rgba(168, 85, 247, 0.15); }
+
+  /* Agent cards */
+  .agent-card { transition: all .25s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden; }
+  .agent-card.running {
+    border-color: #76b900;
+    background: linear-gradient(135deg, rgba(118,185,0,.08), rgba(118,185,0,.02));
+    animation: glow-pulse 1.4s infinite;
+  }
+  .agent-card.done {
+    border-color: #76b900;
+    background: linear-gradient(135deg, rgba(118,185,0,.1), rgba(118,185,0,.03));
+  }
+  .agent-card.done::after {
+    content: '✓'; position: absolute; top: 8px; right: 10px;
+    color: #76b900; font-weight: bold; font-size: 14px;
+  }
+  @keyframes glow-pulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(118,185,0,.45); }
     50%      { box-shadow: 0 0 0 12px rgba(118,185,0,0); }
   }
-  .markdown-body table { width: 100%; border-collapse: collapse; margin: 8px 0; }
-  .markdown-body th, .markdown-body td { padding: 6px 12px; border: 1px solid #2d2d2d; }
-  .markdown-body code { background: #1a1a1a; padding: 2px 6px; border-radius: 4px; }
-  .markdown-body ul { list-style: disc; margin-left: 20px; }
+
+  /* Brand title */
+  .brand-grad {
+    background: linear-gradient(135deg, #76b900 0%, #a855f7 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Markdown content */
+  .markdown-body table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  .markdown-body th, .markdown-body td { padding: 8px 14px; border: 1px solid #27272a; text-align: left; }
+  .markdown-body th { background: #18181b; }
+  .markdown-body code { background: #18181b; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  .markdown-body ul { list-style: disc; margin-left: 22px; margin-top: 4px; }
+  .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 700; margin: 14px 0 8px; }
+  .markdown-body h2 { font-size: 18px; }
+  .markdown-body strong { color: #76b900; }
+
+  /* Sample PR pill buttons */
+  .sample-pill { transition: all .15s ease; }
+  .sample-pill:hover { transform: translateY(-1px); border-color: #76b900; color: #76b900; }
 </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen">
+<body class="grad-bg text-zinc-100 min-h-screen">
 
-<header class="border-b border-zinc-800">
+<header class="border-b border-zinc-800 backdrop-blur sticky top-0 z-10 bg-zinc-950/80">
   <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <div class="text-3xl">🤖</div>
+      <div class="text-3xl">🧞</div>
       <div>
-        <div class="text-2xl font-bold tracking-tight">PR<span class="text-[#76b900]">Claw</span></div>
-        <div class="text-xs text-zinc-400">GitHub-native multi-agent PR triage · powered by NemoClaw + Nemotron</div>
+        <div class="text-2xl font-extrabold tracking-tight">
+          PR<span class="brand-grad">Genie</span>
+        </div>
+        <div class="text-[11px] text-zinc-500">Your wish for clean PRs, granted · Multi-agent GitHub triage powered by NemoClaw + Nemotron</div>
       </div>
     </div>
-    <div class="flex items-center gap-2 text-xs">
-      <div class="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800">
-        <span class="text-zinc-400">model:</span> <span id="model-name" class="font-mono text-[#76b900]">—</span>
+    <div class="flex items-center gap-2 text-[11px]">
+      <div class="px-3 py-1.5 rounded-full bg-zinc-900/80 border border-zinc-800">
+        <span class="text-zinc-500">model:</span>
+        <span id="model-name" class="mono text-[#76b900] ml-1">—</span>
       </div>
-      <div class="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800">
-        <span class="text-zinc-400">policy:</span> <span class="font-mono text-[#76b900]">.github/prclaw.yml</span>
+      <div class="px-3 py-1.5 rounded-full bg-zinc-900/80 border border-zinc-800">
+        <span class="text-zinc-500">policy:</span>
+        <span class="mono text-[#a855f7] ml-1">.github/prgenie.yml</span>
+      </div>
+      <div class="px-3 py-1.5 rounded-full bg-zinc-900/80 border border-zinc-800">
+        <span class="text-zinc-500">runtime:</span>
+        <span class="mono text-orange-400 ml-1">NemoClaw v0.0.7</span>
       </div>
     </div>
   </div>
@@ -47,22 +100,34 @@
 <main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
 
   <!-- Triage form -->
-  <section class="bg-zinc-900 border border-zinc-800 rounded-xl p-6 glow">
-    <h2 class="text-lg font-semibold mb-4">Triage a real PR</h2>
+  <section class="bg-zinc-900/60 backdrop-blur border border-zinc-800 rounded-2xl p-6 glow-green">
+    <div class="flex items-baseline justify-between mb-4">
+      <h2 class="text-lg font-semibold">Triage a real pull request</h2>
+      <span class="text-[11px] text-zinc-500">Powered by Llama-3.3-70B via NVIDIA NIM</span>
+    </div>
     <form id="triage-form" class="grid grid-cols-1 md:grid-cols-12 gap-3">
       <input id="repo" placeholder="owner/repo (e.g. aumghelani/Redhat-Hackathon-JABST)"
-             class="md:col-span-7 bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm focus:border-[#76b900] focus:outline-none" required>
+             class="md:col-span-7 bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm focus:border-[#76b900] focus:outline-none mono" required>
       <input id="pr_number" type="number" min="1" placeholder="PR #"
-             class="md:col-span-2 bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm focus:border-[#76b900] focus:outline-none" required>
-      <label class="md:col-span-1 flex items-center gap-2 text-xs text-zinc-400">
+             class="md:col-span-2 bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm focus:border-[#76b900] focus:outline-none mono" required>
+      <label class="md:col-span-1 flex items-center gap-2 text-xs text-zinc-400 px-2">
         <input id="dry_run" type="checkbox" checked class="accent-[#76b900]"> dry-run
       </label>
       <button type="submit" id="run-btn"
-              class="md:col-span-2 bg-[#76b900] hover:bg-[#5e9400] disabled:bg-zinc-800 text-black font-semibold rounded-lg px-4 py-2.5 text-sm transition">
-        Run pipeline →
+              class="md:col-span-2 bg-[#76b900] hover:bg-[#5e9400] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-semibold rounded-lg px-4 py-2.5 text-sm transition shadow-lg shadow-[#76b900]/20">
+        🪄 Grant my wish
       </button>
     </form>
-    <div class="text-xs text-zinc-500 mt-3">
+
+    <div class="mt-4 flex flex-wrap items-center gap-2">
+      <span class="text-[11px] text-zinc-500 mr-1">Try a demo PR:</span>
+      <button class="sample-pill mono text-[11px] bg-zinc-950 border border-zinc-800 rounded-full px-3 py-1 text-zinc-400" data-repo="aumghelani/Redhat-Hackathon-JABST" data-pr="1">aumghelani/Redhat-Hackathon-JABST #1</button>
+      <button class="sample-pill mono text-[11px] bg-zinc-950 border border-zinc-800 rounded-full px-3 py-1 text-zinc-400" data-repo="aumghelani/Redhat-Hackathon-JABST" data-pr="2">#2 redis-cache</button>
+      <button class="sample-pill mono text-[11px] bg-zinc-950 border border-zinc-800 rounded-full px-3 py-1 text-zinc-400" data-repo="aumghelani/Redhat-Hackathon-JABST" data-pr="3">#3 auth-rewrite</button>
+      <button class="sample-pill mono text-[11px] bg-zinc-950 border border-zinc-800 rounded-full px-3 py-1 text-zinc-400" data-repo="aumghelani/Redhat-Hackathon-JABST" data-pr="4">#4 typo-fix</button>
+    </div>
+
+    <div class="text-[11px] text-zinc-500 mt-3">
       Dry-run shows what would be posted without touching the repo. Uncheck to post for real.
       Requires <code class="text-[#76b900]">GITHUB_PAT</code> in <code>.env</code> with <code>repo</code> scope.
     </div>
@@ -70,38 +135,45 @@
 
   <!-- Agent pipeline visualization -->
   <section>
-    <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+    <h2 class="text-lg font-semibold mb-1 flex items-center gap-2">
       <span>The 7 agents</span>
-      <span class="text-xs text-zinc-500 font-normal">(hospital-ER analogy — see README)</span>
+      <span class="text-xs text-zinc-500 font-normal">— each one a hospital staff role, all gated by NemoClaw</span>
     </h2>
-    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-      <div id="agent-trust"     class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mt-4">
+      <div id="agent-trust"     class="agent-card bg-zinc-900/60 border border-zinc-800 rounded-xl p-3">
         <div class="text-2xl">🩺</div><div class="text-xs font-semibold mt-1">Trust Scorer</div>
         <div class="text-[10px] text-zinc-500">Receptionist</div>
+        <div class="text-[10px] text-zinc-600 mt-1 mono">no LLM</div>
       </div>
-      <div id="agent-risk"      class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+      <div id="agent-risk"      class="agent-card bg-zinc-900/60 border border-zinc-800 rounded-xl p-3">
         <div class="text-2xl">⚠️</div><div class="text-xs font-semibold mt-1">Risk Agent</div>
         <div class="text-[10px] text-zinc-500">Triage Nurse</div>
+        <div class="text-[10px] text-zinc-600 mt-1 mono">no LLM</div>
       </div>
-      <div id="agent-reviewer"  class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+      <div id="agent-reviewer"  class="agent-card bg-zinc-900/60 border border-zinc-800 rounded-xl p-3">
         <div class="text-2xl">🧭</div><div class="text-xs font-semibold mt-1">Reviewer Sug.</div>
         <div class="text-[10px] text-zinc-500">Specialist Ref.</div>
+        <div class="text-[10px] text-zinc-600 mt-1 mono">no LLM</div>
       </div>
-      <div id="agent-persona"   class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+      <div id="agent-persona"   class="agent-card bg-zinc-900/60 border border-zinc-800 rounded-xl p-3">
         <div class="text-2xl">🧠</div><div class="text-xs font-semibold mt-1">Persona Extr.</div>
         <div class="text-[10px] text-zinc-500">Patient Profiler</div>
+        <div class="text-[10px] text-[#76b900] mt-1 mono">1 LLM</div>
       </div>
-      <div id="agent-triage"    class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+      <div id="agent-triage"    class="agent-card bg-zinc-900/60 border border-zinc-800 rounded-xl p-3">
         <div class="text-2xl">👨‍⚕️</div><div class="text-xs font-semibold mt-1">Triage Agent</div>
         <div class="text-[10px] text-zinc-500">Lead Doctor</div>
+        <div class="text-[10px] text-[#76b900] mt-1 mono">1 LLM</div>
       </div>
-      <div id="agent-review"    class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+      <div id="agent-review"    class="agent-card bg-zinc-900/60 border border-zinc-800 rounded-xl p-3">
         <div class="text-2xl">📝</div><div class="text-xs font-semibold mt-1">Review Comm.</div>
         <div class="text-[10px] text-zinc-500">Sr. Consultant</div>
+        <div class="text-[10px] text-[#76b900] mt-1 mono">1 LLM (on /prgenie review)</div>
       </div>
-      <div id="agent-demand"    class="agent-card bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+      <div id="agent-demand"    class="agent-card bg-zinc-900/60 border border-zinc-800 rounded-xl p-3">
         <div class="text-2xl">📊</div><div class="text-xs font-semibold mt-1">Issue Demand</div>
         <div class="text-[10px] text-zinc-500">Public Health</div>
+        <div class="text-[10px] text-[#76b900] mt-1 mono">batch LLM</div>
       </div>
     </div>
   </section>
@@ -111,22 +183,22 @@
 
     <!-- Status badges -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4">
         <div class="text-xs text-zinc-500 uppercase tracking-wider">Trust</div>
         <div id="trust-badge" class="mt-2 text-2xl font-bold">—</div>
         <div id="trust-score" class="text-xs text-zinc-400 mt-1">—</div>
       </div>
-      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4">
         <div class="text-xs text-zinc-500 uppercase tracking-wider">Risk</div>
         <div id="risk-badge" class="mt-2 text-2xl font-bold">—</div>
         <div id="risk-score" class="text-xs text-zinc-400 mt-1">—</div>
       </div>
-      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4">
         <div class="text-xs text-zinc-500 uppercase tracking-wider">Priority</div>
         <div id="priority-badge" class="mt-2 text-2xl font-bold">—</div>
         <div id="action-badge" class="text-xs text-zinc-400 mt-1">—</div>
       </div>
-      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4">
         <div class="text-xs text-zinc-500 uppercase tracking-wider">Reviewer</div>
         <div id="reviewer-badge" class="mt-2 text-2xl font-bold">—</div>
         <div class="text-xs text-zinc-400 mt-1">git-blame ownership</div>
@@ -135,29 +207,31 @@
 
     <!-- PR details + persona -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
         <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Pull Request</h3>
         <div id="pr-info" class="space-y-2 text-sm"></div>
       </div>
-      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
-        <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Maintainer Persona <span class="text-[10px] text-zinc-500">(LLM-extracted)</span></h3>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
+        <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Maintainer Persona <span class="text-[10px] text-zinc-500 normal-case">(LLM-extracted)</span></h3>
         <div id="persona-info" class="space-y-2 text-sm"></div>
       </div>
     </div>
 
     <!-- Triage comment preview -->
-    <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
+    <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
       <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center justify-between">
-        <span>Bot comment <span class="text-[10px] text-zinc-500 normal-case">— what gets posted to GitHub</span></span>
+        <span>Bot comment <span class="text-[10px] text-zinc-500 normal-case">— exactly what gets posted on GitHub</span></span>
         <span id="post-status" class="text-xs"></span>
       </h3>
       <div id="comment-md" class="markdown-body text-sm"></div>
     </div>
 
     <!-- NemoClaw policy -->
-    <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
-      <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">NemoClaw policy gates</h3>
-      <div class="text-xs text-zinc-400 mb-2">Hard-forbidden actions (cannot be re-enabled by YAML):</div>
+    <div class="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 glow-purple">
+      <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">🛡️ NemoClaw policy gates</h3>
+      <div class="text-xs text-zinc-400 mb-3">
+        Hard-forbidden actions (cannot be re-enabled by YAML — runtime enforces these):
+      </div>
       <div id="forbidden-list" class="flex flex-wrap gap-2"></div>
     </div>
   </section>
@@ -165,14 +239,14 @@
   <!-- Loading / error -->
   <div id="loader" class="hidden text-center py-12">
     <div class="inline-block animate-spin rounded-full h-12 w-12 border-2 border-zinc-800 border-t-[#76b900]"></div>
-    <div class="text-zinc-400 mt-4 text-sm" id="loader-text">Running pipeline…</div>
+    <div class="text-zinc-400 mt-4 text-sm" id="loader-text">🧞 Granting your wish…</div>
   </div>
-  <div id="error" class="hidden bg-red-950 border border-red-800 rounded-lg p-4 text-red-200 text-sm"></div>
+  <div id="error" class="hidden bg-red-950/80 border border-red-800 rounded-xl p-4 text-red-200 text-sm"></div>
 
 </main>
 
-<footer class="text-center text-xs text-zinc-600 py-8">
-  PRClaw · Red Hat Open Accelerator vLLM Hackathon · Track 5 · Powered by NVIDIA NemoClaw + Nemotron
+<footer class="text-center text-xs text-zinc-600 py-8 border-t border-zinc-900 mt-12">
+  PRGenie · Red Hat Open Accelerator vLLM Hackathon · Track 5 · Powered by NVIDIA NemoClaw + Nemotron / Llama via NIM
 </footer>
 
 <script>
@@ -192,6 +266,14 @@ function resetAgents() {
   setAgentState('demand', null);
 }
 
+// Sample PR pill buttons
+document.querySelectorAll('.sample-pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('repo').value = btn.dataset.repo;
+    document.getElementById('pr_number').value = btn.dataset.pr;
+  });
+});
+
 document.getElementById('triage-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const repo = document.getElementById('repo').value.trim();
@@ -204,7 +286,6 @@ document.getElementById('triage-form').addEventListener('submit', async (e) => {
   document.getElementById('run-btn').disabled = true;
 
   resetAgents();
-  // visual progression while we wait — staggered animation
   AGENTS.forEach((a, i) => setTimeout(() => setAgentState(a, 'running'), i * 400));
 
   try {
@@ -221,7 +302,7 @@ document.getElementById('triage-form').addEventListener('submit', async (e) => {
     AGENTS.forEach(a => setAgentState(a, 'done'));
     render(data, dry_run);
   } catch (err) {
-    document.getElementById('error').textContent = 'Error: ' + (err.message || err);
+    document.getElementById('error').textContent = '🧞 The genie could not grant your wish: ' + (err.message || err);
     document.getElementById('error').classList.remove('hidden');
     resetAgents();
   } finally {
@@ -234,7 +315,6 @@ function render(d, dry_run) {
   document.getElementById('results').classList.remove('hidden');
   document.getElementById('model-name').textContent = d.model;
 
-  // Badges
   document.getElementById('trust-badge').innerHTML = (TRUST_EMOJI[d.trust.trust_level]||'') + ' ' + d.trust.trust_level;
   document.getElementById('trust-score').textContent = 'score ' + d.trust.trust_score.toFixed(2);
   document.getElementById('risk-badge').innerHTML  = (RISK_EMOJI[d.risk.risk_level]||'') + ' ' + d.risk.risk_level;
@@ -243,34 +323,30 @@ function render(d, dry_run) {
   document.getElementById('action-badge').textContent = 'action: ' + d.analysis.suggested_action;
   document.getElementById('reviewer-badge').textContent = d.reviewer ? '@' + d.reviewer : '—';
 
-  // PR info
   document.getElementById('pr-info').innerHTML = `
-    <div><span class="text-zinc-500">repo:</span> <span class="font-mono">${d.pr.repo}</span></div>
+    <div><span class="text-zinc-500">repo:</span> <span class="mono">${d.pr.repo}</span></div>
     <div><span class="text-zinc-500">PR:</span> <a class="text-[#76b900] hover:underline" href="${d.pr.html_url}" target="_blank">#${d.pr.number} ${escapeHtml(d.pr.title)}</a></div>
-    <div><span class="text-zinc-500">author:</span> <span class="font-mono">@${d.pr.author}</span></div>
-    <div><span class="text-zinc-500">size:</span> <span class="text-green-400">+${d.pr.additions}</span> <span class="text-red-400">-${d.pr.deletions}</span> across ${d.pr.files_count} files</div>
-    <div><span class="text-zinc-500">files:</span> <span class="font-mono text-xs">${d.pr.files.slice(0,5).join(', ')}${d.pr.files.length>5?', …':''}</span></div>
+    <div><span class="text-zinc-500">author:</span> <span class="mono">@${d.pr.author}</span></div>
+    <div><span class="text-zinc-500">size:</span> <span class="text-green-400 mono">+${d.pr.additions}</span> <span class="text-red-400 mono">-${d.pr.deletions}</span> across ${d.pr.files_count} files</div>
+    <div><span class="text-zinc-500">files:</span> <span class="mono text-xs">${d.pr.files.slice(0,5).join(', ')}${d.pr.files.length>5?', …':''}</span></div>
   `;
 
-  // Persona
   document.getElementById('persona-info').innerHTML = `
-    <div><span class="text-zinc-500">focus:</span> ${(d.persona.focus||[]).map(f=>'<span class="bg-zinc-800 rounded px-2 py-0.5 text-xs mr-1">'+escapeHtml(f)+'</span>').join('')}</div>
-    <div><span class="text-zinc-500">tone:</span> <span class="italic">${escapeHtml(d.persona.tone||'')}</span></div>
-    <div><span class="text-zinc-500">strictness:</span> ${d.persona.strictness?.toFixed?.(2) ?? '—'}</div>
-    <div><span class="text-zinc-500">phrases:</span> <span class="font-mono text-xs">${(d.persona.common_phrases||[]).slice(0,3).map(escapeHtml).join('  ·  ')}</span></div>
+    <div><span class="text-zinc-500">focus:</span> ${(d.persona.focus||[]).map(f=>'<span class="bg-[#76b900]/10 border border-[#76b900]/30 text-[#76b900] rounded px-2 py-0.5 text-xs mr-1 mono">'+escapeHtml(f)+'</span>').join('') || '<span class="text-zinc-600">—</span>'}</div>
+    <div><span class="text-zinc-500">tone:</span> <span class="italic">${escapeHtml(d.persona.tone||'—')}</span></div>
+    <div><span class="text-zinc-500">strictness:</span> <span class="mono">${d.persona.strictness?.toFixed?.(2) ?? '—'}</span></div>
+    <div><span class="text-zinc-500">phrases:</span> <span class="mono text-xs text-zinc-400">${(d.persona.common_phrases||[]).slice(0,3).map(escapeHtml).join('  ·  ') || '—'}</span></div>
   `;
 
-  // Comment
   document.getElementById('comment-md').innerHTML = marked.parse(d.triage_comment_md);
   if (d.posted_comment_id) {
-    document.getElementById('post-status').innerHTML = `<span class="text-[#76b900]">✓ posted (id ${d.posted_comment_id})</span>`;
+    document.getElementById('post-status').innerHTML = `<span class="text-[#76b900] font-semibold">✓ posted to GitHub (id ${d.posted_comment_id})</span>`;
   } else if (dry_run) {
-    document.getElementById('post-status').innerHTML = `<span class="text-yellow-500">dry-run — not posted</span>`;
+    document.getElementById('post-status').innerHTML = `<span class="text-yellow-500">🔒 dry-run — not posted</span>`;
   }
 
-  // Forbidden actions
   document.getElementById('forbidden-list').innerHTML = d.policy.forbidden.map(f =>
-    `<span class="bg-red-950 border border-red-900 text-red-300 rounded px-2 py-1 text-xs font-mono">${escapeHtml(f)}</span>`
+    `<span class="bg-red-950/40 border border-red-900/50 text-red-300 rounded-lg px-3 py-1 text-xs mono">⛔ ${escapeHtml(f)}</span>`
   ).join('');
 }
 

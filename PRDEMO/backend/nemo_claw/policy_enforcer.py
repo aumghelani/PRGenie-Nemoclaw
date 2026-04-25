@@ -1,7 +1,7 @@
 """
 NemoClaw policy enforcer — the hospital safety officer.
 
-Loads .github/prclaw.yml from the target repo (via GitHubClient) and
+Loads .github/prgenie.yml from the target repo (via GitHubClient) and
 exposes guards used by every agent before any side-effect.
 
   policy = await PolicyEnforcer.from_repo(repo, github, install_id)
@@ -25,7 +25,7 @@ from backend.nemo_claw.schemas import (
     PolicyDoc,
 )
 
-POLICY_PATH = ".github/prclaw.yml"
+POLICY_PATH = ".github/prgenie.yml"
 
 # Heuristic content checks for review-comment validation.
 HARSH_PATTERNS = [
@@ -139,7 +139,7 @@ class PolicyEnforcer:
     def has_ai_disclosure(self, body: str) -> bool:
         """The post_without_ai_disclosure rule requires every bot comment
         to mention it's AI-generated. PR_TRIAGE_COMMENT footer satisfies this."""
-        markers = ("PRClaw", "AI-assisted", "🤖", "AI-generated")
+        markers = ("PRGenie", "AI-assisted", "🤖", "AI-generated")
         return any(m in body for m in markers)
 
     def assert_disclosure(self, body: str) -> None:

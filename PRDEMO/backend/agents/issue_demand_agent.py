@@ -152,14 +152,14 @@ async def cluster_issues(
 # Comment formatting
 # ---------------------------------------------------------------------------
 
-ISSUE_DEMAND_COMMENT = """## 📊 PRClaw Demand Signal
+ISSUE_DEMAND_COMMENT = """## 📊 PRGenie Demand Signal
 
 This issue has **{reactions} reactions** and **{unique_commenters} unique commenters**, open for **{days_open} days**.{maintainer_silence}
 
 {cluster_section}
 
 ---
-*Auto-surfaced by PRClaw · Label: `demand:{demand_level}` · AI-assisted*
+*Auto-surfaced by PRGenie · Label: `demand:{demand_level}` · AI-assisted*
 """
 
 

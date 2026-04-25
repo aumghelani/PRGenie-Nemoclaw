@@ -1,5 +1,5 @@
 """
-PRClaw CLI — demo against any real GitHub PR.
+PRGenie CLI — demo against any real GitHub PR.
 
 Usage:
     python -m backend.cli triage-pr <owner/repo> <pr_number>
@@ -47,7 +47,7 @@ except ImportError:
 
 @click.group()
 def cli():
-    """PRClaw — GitHub-native PR triage agent."""
+    """PRGenie — GitHub-native PR triage agent."""
 
 
 @cli.command("triage-pr")
@@ -84,7 +84,7 @@ async def _run(repo_full_name: str, pr_number: int, dry_run: bool) -> None:
 
     if HAS_RICH:
         console.print(Panel(
-            f"[bold magenta]🤖 PRClaw[/bold magenta]  triaging "
+            f"[bold magenta]🤖 PRGenie[/bold magenta]  triaging "
             f"[cyan]{repo_full_name}#{pr_number}[/cyan]\n"
             f"LLM: [yellow]{llm.model}[/yellow]   Dry-run: [yellow]{dry_run}[/yellow]",
             border_style="magenta",
@@ -235,7 +235,7 @@ async def _pulse(repo: str, limit: int) -> None:
 
     if HAS_RICH:
         console.print(Panel(
-            f"[bold magenta]🤖 PRClaw Repo Pulse[/bold magenta]  [cyan]{repo}[/cyan]",
+            f"[bold magenta]🤖 PRGenie Repo Pulse[/bold magenta]  [cyan]{repo}[/cyan]",
             border_style="magenta",
         ))
 

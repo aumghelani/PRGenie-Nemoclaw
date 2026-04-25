@@ -1,0 +1,120 @@
+# .github/prgenie.yml
+# PRGenie NemoClaw Policy Configuration
+# Controls how PRGenie behaves on THIS repository.
+# Every agent action — labels, comments, reviews, escalations — is gated by this file.
+# Powered by NVIDIA NemoClaw runtime (Track 5).
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Persona — how the bot's voice should sound (matches the maintainer)
+# ─────────────────────────────────────────────────────────────────────────────
+persona:
+  focus:                     # what this maintainer cares about most
+    - correctness
+    - tests
+    - error_handling
+    - security
+  strictness: 0.8            # 0.0 (lenient) → 1.0 (very strict)
+  tone: constructive but direct
+  preferred_phrases:         # voice anchors — used by Review Commenter
+    - "edge cases?"
+    - "what happens if this fails?"
+    - "needs test coverage"
+    - "is this idempotent?"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. Trust — how the Receptionist scores contributors
+# ─────────────────────────────────────────────────────────────────────────────
+trust:
+  auto_label: true                # apply trust:high/medium/new/flagged labels
+  high_threshold: 0.75            # trust_score ≥ this → "high"
+  medium_threshold: 0.45          # trust_score ≥ this → "medium"
+  cache_hours: 24                 # re-fetch trust signals after this many hours
+  weights:                        # rebalance the trust formula per repo
+    merge_rate: 0.40
+    response_score: 0.30
+    resolution_rate: 0.20
+    account_age: 0.10
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. Risk — what the Triage Nurse flags as sensitive
+# ─────────────────────────────────────────────────────────────────────────────
+risk:
+  auto_label: true
+  large_diff_lines: 500           # > this many lines added → +0.2 risk
+  huge_diff_lines: 1000           # > this many → another +0.2
+  escalate_on:                    # any path containing these → +0.4 risk
+    - auth/
+    - authentication/
+    - oauth/
+    - crypto/
+    - encryption/
+    - security/
+    - secrets/
+    - requirements.txt
+    - package.json
+    - package-lock.json
+    - Pipfile
+    - Pipfile.lock
+    - go.mod
+    - go.sum
+    - Cargo.toml
+    - Cargo.lock
+    - Dockerfile
+    - docker-compose.yml
+    - .github/workflows/
+    - .github/actions/
+    - migrations/
+    - schema.sql
+    - terraform/
+    - kubernetes/
+    - helm/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. Issue Demand — how the Public Health Officer scores community demand
+# ─────────────────────────────────────────────────────────────────────────────
+demand:
+  auto_label: true                # apply demand:high/medium/low labels
+  comment_threshold: 25           # reactions needed to trigger demand comment
+  cluster_min_size: 3             # minimum issues to form a theme cluster
+  cluster_interval_minutes: 15
+  high_priority_score: 8.0
+  medium_priority_score: 3.0
+  label_weights:                  # nudge the score for specific labels
+    security: 1.5
+    bug: 1.3
+    enhancement: 1.0
+    docs: 0.8
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. Review Commenter — controls /prgenie review behavior
+# ─────────────────────────────────────────────────────────────────────────────
+review:
+  require_human_command: true     # NemoClaw enforces — must be /prgenie review
+  max_inline_comments: 8          # cap on comments per review pass
+  drop_on_harsh_language: true    # NemoClaw filter
+  forbid_approve_verdict: true    # never auto-APPROVE; only COMMENT or REQUEST_CHANGES
+  evidence_required: true         # each comment must reference a file:line
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Escalation — when PRGenie should @mention humans
+# ─────────────────────────────────────────────────────────────────────────────
+escalation:
+  on_critical_risk: true
+  on_security_path_change_by_new_user: true
+  on_unmerged_streak_count: 3     # if author has 3+ unmerged closed PRs, escalate
+  notify: ["@maintainer-team"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. Forbidden — actions PRGenie is NEVER allowed to take
+#    These are HARDCODED in the runtime; YAML can ADD but never REMOVE.
+# ─────────────────────────────────────────────────────────────────────────────
+forbidden:
+  - merge_pr
+  - close_pr
+  - close_issue
+  - reject_contributor
+  - post_without_ai_disclosure
+  - use_identity_signals          # trust scoring must be behavior-only
+  - dismiss_human_review
+  - bypass_required_checks
+  - assign_yourself_as_reviewer

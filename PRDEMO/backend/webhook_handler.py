@@ -48,7 +48,7 @@ LABEL_COLORS: dict[str, str] = {
 # Event-action combinations we actually care about.
 PR_ACTIONS = {"opened", "synchronize", "reopened"}
 ISSUE_ACTIONS = {"opened", "edited", "reopened"}
-COMMAND_PREFIX = "/prclaw"
+COMMAND_PREFIX = "/prgenie"
 
 
 async def route_event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -160,7 +160,7 @@ async def handle_pr_event(payload: dict) -> dict:
     head_sha = (pr.get("head") or {}).get("sha", "")
     check_run_id = await github.create_check_run(
         repo_full_name, head_sha=head_sha, installation_id=installation_id,
-        title=f"PRClaw: trust={trust['trust_level']} risk={risk['risk_level']}",
+        title=f"PRGenie: trust={trust['trust_level']} risk={risk['risk_level']}",
         summary=format_check_run_summary(analysis, trust, risk),
         conclusion="neutral",  # never block — informational only
     )
@@ -169,7 +169,7 @@ async def handle_pr_event(payload: dict) -> dict:
     if policy.can_post_comment():
         comment_id = await github.post_pr_comment(repo_full_name, pr_number, triage_comment, installation_id)
 
-    # 6. Persist for /prclaw review later.
+    # 6. Persist for /prgenie review later.
     with get_session() as s:
         save_pr_analysis(s, pr_number, repo_full_name, {
             **analysis,
@@ -212,7 +212,7 @@ async def handle_command(payload: dict) -> dict:
 
     log.info("command: repo=%s pr=#%s body=%r", repo_full_name, pr_number, body)
 
-    if len(parts) < 2 or parts[0] != "/prclaw":
+    if len(parts) < 2 or parts[0] != "/prgenie":
         return {"ok": True, "handled_as": "command_unknown", "command": parts}
 
     sub = parts[1].lower()
@@ -224,7 +224,7 @@ async def handle_command(payload: dict) -> dict:
 
 
 async def _handle_review_command(payload: dict, repo_full_name: str, installation_id: int, pr_number: int) -> dict:
-    """Handle `/prclaw review` — generate inline review comments via the maintainer's voice."""
+    """Handle `/prgenie review` — generate inline review comments via the maintainer's voice."""
     github = get_github_client()
     llm = get_llm_client()
     policy = await PolicyEnforcer.from_repo(repo_full_name, github, installation_id)
@@ -239,7 +239,7 @@ async def _handle_review_command(payload: dict, repo_full_name: str, installatio
         persona_row = get_persona(s, repo_full_name)
 
     if cached is None:
-        msg = "⚠️ PRClaw has no analysis cached for this PR yet. Reopen or push a commit to trigger triage. _AI-assisted notice._"
+        msg = "⚠️ PRGenie has no analysis cached for this PR yet. Reopen or push a commit to trigger triage. _AI-assisted notice._"
         await github.post_pr_comment(repo_full_name, pr_number, msg, installation_id)
         return {"ok": True, "handled_as": "review_no_analysis"}
 
@@ -252,7 +252,7 @@ async def _handle_review_command(payload: dict, repo_full_name: str, installatio
     )
 
     body = (
-        f"🤖 **PRClaw Review** — AI-assisted, grounded in the cached triage analysis.\n\n"
+        f"🤖 **PRGenie Review** — AI-assisted, grounded in the cached triage analysis.\n\n"
         f"{analysis.get('summary', '')}"
     )
     review_id = await github.submit_pr_review(

@@ -13,7 +13,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="PRClaw",
+    title="PRGenie",
     description="GitHub-native AI agent for PR triage, trust scoring, and issue demand.",
     version="0.1.0",
     lifespan=lifespan,

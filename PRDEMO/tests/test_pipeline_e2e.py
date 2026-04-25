@@ -87,11 +87,11 @@ async def test_pr_pipeline_full_flow(http: AsyncClient):
     # The triage comment carries the AI disclosure footer.
     pr_comment_call = next(c for c in gh.recorded_calls if c.method == "post_pr_comment")
     body_text = pr_comment_call.payload["body"]
-    assert "PRClaw" in body_text
+    assert "PRGenie" in body_text
     assert "AI-assisted" in body_text
     assert "@maintainer-jane" in body_text
 
-    # --- DB has the analysis cached for /prclaw review ---
+    # --- DB has the analysis cached for /prgenie review ---
     with get_session() as s:
         row = get_pr_analysis(s, 42, "acme/widgets")
         assert row is not None
@@ -99,8 +99,8 @@ async def test_pr_pipeline_full_flow(http: AsyncClient):
         assert row.suggested_reviewer == "maintainer-jane"
 
 
-async def test_prclaw_review_command_after_pr_open(http: AsyncClient):
-    """End-to-end: PR opens (cache analysis) → /prclaw review submits inline review."""
+async def test_prgenie_review_command_after_pr_open(http: AsyncClient):
+    """End-to-end: PR opens (cache analysis) → /prgenie review submits inline review."""
     # 1. PR opens — caches PRAnalysis.
     pr_body = (PAYLOAD_DIR / "pr_opened.json").read_bytes()
     r1 = await http.post("/webhook", content=pr_body, headers={
@@ -109,7 +109,7 @@ async def test_prclaw_review_command_after_pr_open(http: AsyncClient):
     })
     assert r1.status_code == 200
 
-    # 2. Maintainer types /prclaw review.
+    # 2. Maintainer types /prgenie review.
     cmd_body = (PAYLOAD_DIR / "issue_comment_command.json").read_bytes()
     r2 = await http.post("/webhook", content=cmd_body, headers={
         "X-GitHub-Event": "issue_comment",

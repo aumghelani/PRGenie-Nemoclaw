@@ -1,5 +1,5 @@
 """
-GitHub REST client for PRClaw.
+GitHub REST client for PRGenie.
 
 Two modes, controlled by MOCK_MODE in settings (or the `mock_mode` constructor arg):
 
@@ -114,7 +114,7 @@ MOCK_USER = {
     "created_at": "2025-09-01T10:00:00Z",  # ~7 months old by hackathon date
 }
 
-MOCK_PRCLAW_YML = """\
+MOCK_PRGENIE_YML = """\
 persona:
   focus: [correctness, tests, error_handling]
   strictness: 0.8
@@ -290,7 +290,7 @@ class GitHubClient:
         head_sha: str,
         installation_id: int,
         *,
-        name: str = "PRClaw",
+        name: str = "PRGenie",
         title: str,
         summary: str,
         conclusion: str = "neutral",  # success | failure | neutral | cancelled | skipped | timed_out | action_required
@@ -446,8 +446,8 @@ class GitHubClient:
     async def get_repo_file(self, repo_full_name: str, path: str, installation_id: int) -> str | None:
         """Returns file contents as text, or None if not found."""
         if self.mock_mode:
-            if path == ".github/prclaw.yml":
-                return MOCK_PRCLAW_YML
+            if path == ".github/prgenie.yml":
+                return MOCK_PRGENIE_YML
             return None
         try:
             r = await self._request(
