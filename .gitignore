@@ -1,5 +1,32 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Local DB
+*.db
+
 # Secrets
+.env
+github-app.pem
 Hugging Face token.txt
 
-# Claude internal
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor / agent internals
 .claude/
+
+# Local-only working directories (not part of the PRGenie repo)
+agentbench-live/
+docs/
+vLLM-hackathon/
+npm-supply-chain-analyzer/
+oss-resurrector/
+PICS/
+CHECKLIST.md
+EXPLAIN.md
+JABST.md
