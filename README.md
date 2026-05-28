@@ -7,28 +7,27 @@
 
 ## What is PRGenie?
 
-PRGenie is a **GitHub App**. You install it on a repo, and it starts watching pull requests and issues like a hospital ER watches incoming patients — every PR is "intake," every issue is "a complaint at the front desk."
+PRGenie is a **GitHub App**. You install it on a repo, and it watches pull requests and issues — analysing every incoming PR and surfacing the issues that matter most.
 
 A team of **7 specialised agents** each plays a role:
 
-| Hospital Role         | PRGenie Agent          | What it does in one line                                       |
-|-----------------------|-----------------------|-----------------------------------------------------------------|
-| Receptionist          | Trust Scorer          | Looks at the contributor's history — friend or stranger?        |
-| Triage Nurse          | Risk Agent            | "How sick is this PR?" — diff size + sensitive files            |
-| Lead Doctor           | Triage Agent          | Reads the chart, writes the diagnosis (summary + checklist)     |
-| Specialist Referrer   | Reviewer Suggester    | Routes the case to the right specialist (file owner)            |
-| Patient Profiler      | Persona Extractor     | Learns *how this maintainer* prefers to treat patients          |
-| Senior Consultant     | Review Commenter      | Writes the formal opinion when the doctor says `/prgenie review` |
-| Public Health Officer | Issue Demand Agent    | Watches the waiting room — flags outbreaks                      |
+| PRGenie Agent          | What it does in one line                                              |
+|------------------------|-----------------------------------------------------------------------|
+| Trust Scorer           | Scores contributor reliability from their past PR behaviour on the repo |
+| Risk Agent             | Flags risky PRs by combining diff size, sensitive files, and trust band  |
+| Triage Agent           | Generates the summary, priority, concerns, and reviewer checklist        |
+| Reviewer Suggester     | Picks the most likely human reviewer from file-ownership history         |
+| Persona Extractor      | Learns *how this maintainer* reviews — focus, tone, common phrases       |
+| Review Commenter       | Posts inline review comments in the maintainer's voice on `/prgenie review` |
+| Issue Demand Agent     | Scores and clusters open issues by community demand                      |
 
-The whole hospital runs under one set of safety rules — `.github/prgenie.yml` — enforced by **NemoClaw** (the hospital's safety/compliance officer). No agent can do anything the policy file forbids.
+Every agent action is gated by one policy file — `.github/prgenie.yml` — enforced by **NemoClaw**. No agent can do anything the policy file forbids.
 
 ---
 
 ## Quick start (mock mode, no GPU needed)
 
 ```bash
-cd PRDEMO
 python -m venv .venv
 .venv/Scripts/activate          # Windows
 # source .venv/bin/activate     # Linux/Mac
@@ -75,21 +74,21 @@ Everything routes through the **NemoClaw policy enforcer** before any side-effec
 
 ---
 
-## The 7 Agents (hospital-ER style)
+## The 7 Agents
 
 Each card uses the same five-section template:
 1. **Role** — what the agent does, one paragraph
 2. **What it can access** — its inputs and read permissions
 3. **What it's blocked from** — NemoClaw guardrails it cannot violate
 4. **Policy snippet** — the `.github/prgenie.yml` keys that steer it
-5. **How it talks to other agents** — its outputs and the shared "patient chart" (DB + GitHub API)
+5. **How it talks to other agents** — its outputs and the shared state (DB + GitHub API)
 
 ---
 
-### 1. Trust Scorer — *the Receptionist*
+### 1. Trust Scorer
 
 **Role.**
-First contact. When a PR lands, the Trust Scorer pulls up the contributor's record at this repo — past PRs, merge rate, how fast they answered review comments, account age — and stamps a coloured wristband on them: `high`, `medium`, `new`, or `flagged`. **Zero LLM calls** — pure rules. The receptionist doesn't diagnose; she identifies you.
+When a PR lands, the Trust Scorer pulls up the contributor's record at this repo — past PRs, merge rate, how fast they answered review comments, account age — and assigns them a trust band: `high`, `medium`, `new`, or `flagged`. **Zero LLM calls** — pure rules over GitHub history.
 
 **What it can access.**
 - `GET /repos/{owner}/{repo}/pulls?creator={login}&state=all` (last 20 PRs)
@@ -113,10 +112,10 @@ Writes `ContributorTrust { trust_level, trust_score, signals }` to the DB. The R
 
 ---
 
-### 2. Risk Agent — *the Triage Nurse*
+### 2. Risk Agent
 
 **Role.**
-Looks at the wound, not the patient. Counts how many sensitive files the diff touches (`auth/`, `crypto/`, `requirements.txt`, `.github/workflows/`…), looks at the diff size, mixes in the contributor's trust band, and assigns a colour: `low / medium / high / critical`. **No LLM** — pattern matching on file paths.
+Counts how many sensitive files the diff touches (`auth/`, `crypto/`, `requirements.txt`, `.github/workflows/`…), looks at the diff size, mixes in the contributor's trust band, and assigns a risk level: `low / medium / high / critical`. **No LLM** — pattern matching on file paths.
 
 **What it can access.**
 - `pull_request.files` from the webhook payload
@@ -144,10 +143,10 @@ Returns `{ risk_level, risk_score, sensitive_files, should_escalate }` in-proces
 
 ---
 
-### 3. Triage Agent — *the Lead Doctor*
+### 3. Triage Agent
 
 **Role.**
-The only agent that holds the whole chart. Takes the diff, the maintainer's persona, the trust band, the risk profile, and writes the diagnosis: a 2–3 sentence summary, a priority, a list of concerns, and a reviewer checklist. **One LLM call per PR** — the most expensive call in the system.
+The only agent that sees the full picture. Takes the diff, the maintainer's persona, the trust band, and the risk profile, and produces a 2–3 sentence summary, a priority, a list of concerns, and a reviewer checklist. **One LLM call per PR** — the most expensive call in the system.
 
 **What it can access.**
 - Full PR diff (truncated to 3000 chars: head 1500 + tail 1500)
@@ -173,7 +172,7 @@ Writes a full `PRAnalysis` row. The webhook handler calls `format_triage_comment
 
 ---
 
-### 4. Reviewer Suggester — *the Specialist Referrer*
+### 4. Reviewer Suggester
 
 **Role.**
 Looks at every file the PR touches, asks GitHub "who has committed to this file most often?", sums up ownership across the changed files, and points at the most likely human reviewer. **No LLM** — straight `git blame` math via the commits API.
@@ -194,10 +193,10 @@ Returns a single `login | None` to the pipeline. The Triage Agent embeds it in t
 
 ---
 
-### 5. Persona Extractor — *the Patient Profiler*
+### 5. Persona Extractor
 
 **Role.**
-Long-running anthropologist. Once a week (and on app install) it reads the maintainer's last 50 PR reviews and builds a JSON profile: what they care about, how strict they are, the phrases they keep using, what they tolerate. The other agents read this profile so the bot's voice matches the maintainer's. **One LLM call per week** — cached.
+Once a week (and on app install) it reads the maintainer's last 50 PR reviews and builds a JSON profile: what they care about, how strict they are, the phrases they keep using, what they tolerate. The other agents read this profile so the bot's voice matches the maintainer's. **One LLM call per week** — cached.
 
 **What it can access.**
 - `GET /repos/{owner}/{repo}/pulls/{n}/reviews` (last 50, across PRs)
@@ -214,10 +213,10 @@ Writes `MaintainerPersona { focus, strictness, tone, common_phrases, tolerance }
 
 ---
 
-### 6. Review Commenter — *the Senior Consultant*
+### 6. Review Commenter
 
 **Role.**
-Sleeps until the maintainer types `/prgenie review` on a PR. Then takes the cached triage concerns + the persona + the diff, and produces *inline review comments* positioned on specific lines, written in the maintainer's voice. **One LLM call per `/prgenie review` invocation.**
+Stays dormant until the maintainer types `/prgenie review` on a PR. Then takes the cached triage concerns + the persona + the diff, and produces *inline review comments* positioned on specific lines, written in the maintainer's voice. **One LLM call per `/prgenie review` invocation.**
 
 **What it can access.**
 - Cached `PRAnalysis` (from the original PR-opened pipeline)
@@ -242,10 +241,10 @@ Calls `github.submit_pr_review(...)` directly with the comments + verdict. Write
 
 ---
 
-### 7. Issue Demand Agent — *the Public Health Officer*
+### 7. Issue Demand Agent
 
 **Role.**
-Watches the waiting room. Every issue event (open, comment, reaction) gets a fresh **demand score** = community engagement × age × maintainer silence. Labels each issue `demand:high/medium/low`. Every 15 minutes it batches all unclustered issues into one LLM call to group them by theme — so the maintainer sees "*9 issues are really one Redis bug*" instead of 9 noisy threads.
+Every issue event (open, comment, reaction) gets a fresh **demand score** = community engagement × age × maintainer silence. Labels each issue `demand:high/medium/low`. Every 15 minutes it batches all unclustered issues into one LLM call to group them by theme — so the maintainer sees "*9 issues are really one Redis bug*" instead of 9 noisy threads.
 
 **What it can access.**
 - `GET /repos/{owner}/{repo}/issues?state=open`
@@ -271,7 +270,7 @@ Writes `IssueScore { demand_level, priority_score, cluster_id }`. Calls `github.
 
 ---
 
-## NemoClaw — the hospital's safety officer
+## NemoClaw — the policy enforcer
 
 NemoClaw is the **only** entity the agents go through to touch GitHub. Every `add_label`, every `post_*_comment`, every `submit_pr_review` is gated by:
 
@@ -319,7 +318,7 @@ The policy lives in **`.github/prgenie.yml`** of the target repo. PRGenie fetche
 
 Every signal is **behavior-only** — NemoClaw forbids `use_identity_signals`, so name/org/photo/nationality never enter any formula.
 
-### Trust Scorer (Receptionist)
+### Trust Scorer
 
 ```
 trust_score = merge_rate     × 0.40       # merged_prs / total_prs in this repo
@@ -337,7 +336,7 @@ clamped to [0.0, 1.0]
 
 **Cache:** updated value reused for `cache_hours` (default 24) before re-fetching from GitHub.
 
-### Risk Agent (Triage Nurse)
+### Risk Agent
 
 ```
 base_risk =
@@ -355,7 +354,7 @@ clamped to [0.0, 1.0]
 
 **Escalation rule (NemoClaw-enforced):** `should_escalate = risk ∈ {high, critical} AND trust ∈ {new, flagged}`. Diff size alone never escalates a trusted contributor.
 
-### Reviewer Suggester (Specialist Referrer)
+### Reviewer Suggester
 
 For each of the first 10 changed files:
 ```
@@ -363,7 +362,7 @@ ownership[author] += 1 / total_commits_on_file        # per commit on that file
 ```
 Sum across all files, drop the PR author, return top login. Returns `None` when only new files.
 
-### Issue Demand Agent (Public Health Officer)
+### Issue Demand Agent
 
 ```
 demand_score    = reactions × 0.4
@@ -377,7 +376,7 @@ priority_score  = demand_score × max(1.0, neglect_score)
 **Mapping:** `≥ 8.0` high · `≥ 3.0` medium · else low.
 **Trust-neutral**: scoring never looks at *who* opened the issue — only community engagement.
 
-### Persona Extractor (Patient Profiler)
+### Persona Extractor
 
 One LLM call per maintainer per week (cached). Reads up to 50 of their recent reviews, asks Nemotron via the `submit_persona` tool to extract:
 ```
@@ -392,7 +391,7 @@ One LLM call per maintainer per week (cached). Reads up to 50 of their recent re
 ```
 The output is fed into Triage's prompt + Review Commenter's voice.
 
-### Triage Agent (Lead Doctor)
+### Triage Agent
 
 One LLM call per PR. Combines persona + trust + risk + diff (head 1500 + tail 1500 chars), forces `submit_triage` tool call:
 ```
@@ -400,7 +399,7 @@ One LLM call per PR. Combines persona + trust + risk + diff (head 1500 + tail 15
 ```
 `suggested_action` ∈ {approve, request_changes, comment, escalate}. **`merge` and `close` are not allowed** — schema-enforced + hard-forbidden in NemoClaw.
 
-### Review Commenter (Senior Consultant)
+### Review Commenter
 
 Only runs when a human types `/prgenie review` (NemoClaw gates `can_submit_review(triggered_by_command=True)`). Generates inline comments grounded in the cached triage `concerns`. Each comment is filtered through `validate_review_comment(...)` — empty bodies or harsh-language matches are dropped (logged in `dropped[]`).
 **Verdict can only be `COMMENT` or `REQUEST_CHANGES`** — `APPROVE` is hard-coded out.
@@ -503,7 +502,7 @@ The repo input field accepts `owner/repo` **or** a full GitHub URL (`https://git
 ## File map
 
 ```
-PRDEMO/
+.
 ├── backend/
 │   ├── main.py                  FastAPI entrypoint
 │   ├── config.py                Pydantic settings (.env)
@@ -585,7 +584,7 @@ Both serve `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16` on port `5000` with `--s
 
 **2. Get the public URL** (Brev tunnel or instance public IP).
 
-**3. Update `PRDEMO/.env`:**
+**3. Update `.env`:**
 ```bash
 VLLM_BASE_URL=http://<brev-ip>:5000/v1
 VLLM_MODEL=nemotron
